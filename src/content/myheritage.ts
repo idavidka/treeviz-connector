@@ -9,14 +9,64 @@ import type { ConnectorPerson, ConnectorTree, FieldKey } from "../protocol.js";
 
 type WriteField = { id: string; value?: string; check?: boolean };
 
-const valueOf = (id: string): string =>
-	(document.getElementById(id) as HTMLInputElement | HTMLSelectElement | null)?.value ||
-	"";
+const editorDocuments = (): Document[] => {
+	const docs = [document];
+	const visit = (doc: Document): void => {
+		for (const frame of Array.from(doc.querySelectorAll("iframe"))) {
+			try {
+				const child = frame.contentDocument;
+				if (child && !docs.includes(child)) {
+					docs.push(child);
+					visit(child);
+				}
+			} catch {
+				// A cross-origin frame is not the editor.
+			}
+		}
+	};
+	visit(document);
+	return docs;
+};
 
-const composedDate = (prefix: string): string => {
-	const year = valueOf(`gdp_firstDateYear_${prefix}`);
-	const month = valueOf(`gdp_firstDateMonth_${prefix}`);
-	const day = valueOf(`gdp_firstDateDay_${prefix}`);
+const activeForm = (): HTMLFormElement | null => {
+	for (const doc of editorDocuments()) {
+		const named = doc.getElementById("editProfileForm");
+		if (named instanceof HTMLFormElement) {
+			return named;
+		}
+		const firstName =
+			doc.getElementById("firstName") || doc.querySelector("[name='firstName']");
+		const form = firstName?.closest("form");
+		if (form instanceof HTMLFormElement) {
+			return form;
+		}
+	}
+	return null;
+};
+
+const valueOf = (id: string, root: ParentNode = document): string => {
+	const node =
+		root.querySelector(`#${CSS.escape(id)}`) ||
+		root.querySelector(`[name="${CSS.escape(id)}"]`);
+	if (
+		node instanceof HTMLInputElement ||
+		node instanceof HTMLSelectElement ||
+		node instanceof HTMLTextAreaElement
+	) {
+		return node.value || "";
+	}
+	return "";
+};
+
+const onEditorPage = (): boolean => /edit-profile\.php/i.test(window.location.pathname);
+
+const urlPersonId = (): string =>
+	parseMyHeritageLocation(window.location.href)?.personId?.replace(/[^\d]/g, "") || "";
+
+const composedDate = (prefix: string, root: ParentNode = document): string => {
+	const year = valueOf(`gdp_firstDateYear_${prefix}`, root);
+	const month = valueOf(`gdp_firstDateMonth_${prefix}`, root);
+	const day = valueOf(`gdp_firstDateDay_${prefix}`, root);
 	if (!year || year.toLocaleLowerCase() === "év" || !/^\d{4}$/.test(year)) {
 		return "";
 	}
@@ -31,36 +81,38 @@ const composedDate = (prefix: string): string => {
 	return year;
 };
 
-const checkedSex = (): string => {
-	const selected = document.querySelector(
-		'#editProfileForm input[name="gender"]:checked'
-	) as HTMLInputElement | null;
-	return selected?.value || "";
+const checkedSex = (form: ParentNode): string => {
+	const selected = form.querySelector('input[name="gender"]:checked');
+	return selected instanceof HTMLInputElement ? selected.value : "";
 };
 
 const readForm = (): SiteFacts | undefined => {
-	const form = document.getElementById("editProfileForm");
+	const form = activeForm();
 	if (!form) {
 		return undefined;
 	}
-	const individual = valueOf("individualID");
+	const individual = valueOf("individualID", form) || urlPersonId();
 	if (!individual) {
 		return undefined;
 	}
 	return {
 		layoutKnown: true,
-		name: `${valueOf("firstName")} ${valueOf("lastName")}`.trim(),
-		sex: checkedSex(),
-		birthDate: composedDate("birthDate"),
-		birthPlace: valueOf("birthPlace"),
-		deathDate: composedDate("deathDate"),
-		deathPlace: valueOf("deathPlace"),
-		marriageDate: composedDate("marriageDate0"),
-		marriagePlace: valueOf("marriagePlace0"),
+		name: `${valueOf("firstName", form)} ${valueOf("lastName", form)}`.trim(),
+		sex: checkedSex(form),
+		birthDate: composedDate("birthDate", form),
+		birthPlace: valueOf("birthPlace", form),
+		deathDate: composedDate("deathDate", form),
+		deathPlace: valueOf("deathPlace", form),
+		marriageDate: composedDate("marriageDate0", form),
+		marriagePlace: valueOf("marriagePlace0", form),
 	};
 };
 
-const formPersonId = (): string => valueOf("individualID").replace(/[^\d]/g, "");
+const formPersonId = (): string => {
+	const form = activeForm();
+	const field = form ? valueOf("individualID", form) : "";
+	return field.replace(/[^\d]/g, "") || urlPersonId();
+};
 
 const writable = (_key: FieldKey): boolean => true;
 
@@ -117,11 +169,14 @@ const fieldsFor = (person: ConnectorPerson, keys: FieldKey[]): WriteField[] => {
 };
 
 const openEditor = async (personId: string, siteId?: string): Promise<boolean> => {
-	if (document.getElementById("editProfileForm") && formPersonId() === personId) {
+	if (activeForm() && formPersonId() === personId) {
 		return true;
 	}
+	if (onEditorPage()) {
+		return false;
+	}
 	let link = document.querySelector(
-		'a[href*="edit-profile.php"]'
+		"#editProfilePageLink, a.PK_popupLink[href*='edit-profile.php']"
 	) as HTMLAnchorElement | null;
 	if (!link) {
 		const found = document.body.innerHTML.match(
@@ -148,12 +203,12 @@ const openEditor = async (personId: string, siteId?: string): Promise<boolean> =
 	link?.click();
 	const started = Date.now();
 	while (Date.now() - started < 6000) {
-		if (document.getElementById("editProfileForm") && formPersonId() === personId) {
+		if (activeForm() && formPersonId() === personId) {
 			return true;
 		}
 		await new Promise((resolve) => window.setTimeout(resolve, 200));
 	}
-	const opened = Boolean(document.getElementById("editProfileForm"));
+	const opened = Boolean(activeForm());
 	if (!opened) {
 		connectorLog("myheritage", "editor did not open", { personId, siteId });
 	}
@@ -172,7 +227,9 @@ const showTree = (
 		return;
 	}
 	const form = readForm();
-	const sameForm = Boolean(form && formPersonId() === personId);
+	const sameForm = Boolean(
+		form && (formPersonId() === personId || (onEditorPage() && urlPersonId() === personId))
+	);
 	const diffs = form && sameForm ? diffPerson(form, person, writable) : [];
 	connectorLog("myheritage", "compare", {
 		tree: tree.name,

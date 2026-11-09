@@ -799,11 +799,50 @@
   };
 
   // extensions/treeviz-connector/src/content/myheritage.ts
-  var valueOf = (id) => document.getElementById(id)?.value || "";
-  var composedDate = (prefix) => {
-    const year = valueOf(`gdp_firstDateYear_${prefix}`);
-    const month = valueOf(`gdp_firstDateMonth_${prefix}`);
-    const day = valueOf(`gdp_firstDateDay_${prefix}`);
+  var editorDocuments = () => {
+    const docs = [document];
+    const visit = (doc) => {
+      for (const frame of Array.from(doc.querySelectorAll("iframe"))) {
+        try {
+          const child = frame.contentDocument;
+          if (child && !docs.includes(child)) {
+            docs.push(child);
+            visit(child);
+          }
+        } catch {
+        }
+      }
+    };
+    visit(document);
+    return docs;
+  };
+  var activeForm = () => {
+    for (const doc of editorDocuments()) {
+      const named = doc.getElementById("editProfileForm");
+      if (named instanceof HTMLFormElement) {
+        return named;
+      }
+      const firstName = doc.getElementById("firstName") || doc.querySelector("[name='firstName']");
+      const form = firstName?.closest("form");
+      if (form instanceof HTMLFormElement) {
+        return form;
+      }
+    }
+    return null;
+  };
+  var valueOf = (id, root = document) => {
+    const node = root.querySelector(`#${CSS.escape(id)}`) || root.querySelector(`[name="${CSS.escape(id)}"]`);
+    if (node instanceof HTMLInputElement || node instanceof HTMLSelectElement || node instanceof HTMLTextAreaElement) {
+      return node.value || "";
+    }
+    return "";
+  };
+  var onEditorPage = () => /edit-profile\.php/i.test(window.location.pathname);
+  var urlPersonId = () => parseMyHeritageLocation(window.location.href)?.personId?.replace(/[^\d]/g, "") || "";
+  var composedDate = (prefix, root = document) => {
+    const year = valueOf(`gdp_firstDateYear_${prefix}`, root);
+    const month = valueOf(`gdp_firstDateMonth_${prefix}`, root);
+    const day = valueOf(`gdp_firstDateDay_${prefix}`, root);
     if (!year || year.toLocaleLowerCase() === "\xE9v" || !/^\d{4}$/.test(year)) {
       return "";
     }
@@ -817,34 +856,36 @@
     }
     return year;
   };
-  var checkedSex = () => {
-    const selected = document.querySelector(
-      '#editProfileForm input[name="gender"]:checked'
-    );
-    return selected?.value || "";
+  var checkedSex = (form) => {
+    const selected = form.querySelector('input[name="gender"]:checked');
+    return selected instanceof HTMLInputElement ? selected.value : "";
   };
   var readForm = () => {
-    const form = document.getElementById("editProfileForm");
+    const form = activeForm();
     if (!form) {
       return void 0;
     }
-    const individual = valueOf("individualID");
+    const individual = valueOf("individualID", form) || urlPersonId();
     if (!individual) {
       return void 0;
     }
     return {
       layoutKnown: true,
-      name: `${valueOf("firstName")} ${valueOf("lastName")}`.trim(),
-      sex: checkedSex(),
-      birthDate: composedDate("birthDate"),
-      birthPlace: valueOf("birthPlace"),
-      deathDate: composedDate("deathDate"),
-      deathPlace: valueOf("deathPlace"),
-      marriageDate: composedDate("marriageDate0"),
-      marriagePlace: valueOf("marriagePlace0")
+      name: `${valueOf("firstName", form)} ${valueOf("lastName", form)}`.trim(),
+      sex: checkedSex(form),
+      birthDate: composedDate("birthDate", form),
+      birthPlace: valueOf("birthPlace", form),
+      deathDate: composedDate("deathDate", form),
+      deathPlace: valueOf("deathPlace", form),
+      marriageDate: composedDate("marriageDate0", form),
+      marriagePlace: valueOf("marriagePlace0", form)
     };
   };
-  var formPersonId = () => valueOf("individualID").replace(/[^\d]/g, "");
+  var formPersonId = () => {
+    const form = activeForm();
+    const field = form ? valueOf("individualID", form) : "";
+    return field.replace(/[^\d]/g, "") || urlPersonId();
+  };
   var writable = (_key) => true;
   var dateFields = (prefix, raw) => {
     const parsed = parseLooseDate(raw);
@@ -897,11 +938,14 @@
     return fields;
   };
   var openEditor = async (personId, siteId) => {
-    if (document.getElementById("editProfileForm") && formPersonId() === personId) {
+    if (activeForm() && formPersonId() === personId) {
       return true;
     }
+    if (onEditorPage()) {
+      return false;
+    }
     let link = document.querySelector(
-      'a[href*="edit-profile.php"]'
+      "#editProfilePageLink, a.PK_popupLink[href*='edit-profile.php']"
     );
     if (!link) {
       const found = document.body.innerHTML.match(
@@ -928,12 +972,12 @@
     link?.click();
     const started = Date.now();
     while (Date.now() - started < 6e3) {
-      if (document.getElementById("editProfileForm") && formPersonId() === personId) {
+      if (activeForm() && formPersonId() === personId) {
         return true;
       }
       await new Promise((resolve) => window.setTimeout(resolve, 200));
     }
-    const opened = Boolean(document.getElementById("editProfileForm"));
+    const opened = Boolean(activeForm());
     if (!opened) {
       connectorLog("myheritage", "editor did not open", { personId, siteId });
     }
@@ -946,7 +990,9 @@
       return;
     }
     const form = readForm();
-    const sameForm = Boolean(form && formPersonId() === personId);
+    const sameForm = Boolean(
+      form && (formPersonId() === personId || onEditorPage() && urlPersonId() === personId)
+    );
     const diffs = form && sameForm ? diffPerson(form, person, writable) : [];
     connectorLog("myheritage", "compare", {
       tree: tree.name,
