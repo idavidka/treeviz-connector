@@ -196,20 +196,20 @@ const showTree = (
 		layoutKnown: sameForm ? true : undefined,
 		status: sameForm ? undefined : t("openEdit"),
 		onUpdateSite: sameForm
-			? (key) => {
-					void writeSelected(person, [key]);
+			? (diff) => {
+					void writeSelected(person, [diff.key]);
 				}
 			: undefined,
-		onUpdateTree: (key) => {
-			const diff = diffs.find((item) => item.key === key);
+		onUpdateTree: (diff) => {
 			patchPanel({ busy: true });
 			void ask({
 				type: "connector:update-treeviz",
 				sourcePersonId: person.sourcePersonId,
 				sourceTreeId: tree.sourceTreeId,
-				key,
-				site: diff?.site,
-				treeviz: diff?.treeviz,
+				key: diff.key,
+				label: diff.label,
+				site: diff.site,
+				treeviz: diff.treeviz,
 			}).then((response) => {
 				const code = String(response.code ?? "");
 				const names = String(response.names ?? "");

@@ -28,6 +28,13 @@ export type ConnectorPerson = {
 	parentIds?: string[];
 	spouseIds?: string[];
 	childIds?: string[];
+	/** Other Ancestry facts, besides name, sex, birth, death, and marriage. */
+	facts?: ConnectorFact[];
+};
+
+export type ConnectorFact = {
+	title: string;
+	value: string;
 };
 
 export type ConnectorTree = {
@@ -76,10 +83,13 @@ export type FieldKey =
 	| "marriagePlace"
 	| "parents"
 	| "spouses"
-	| "children";
+	| "children"
+	| "fact";
 
 export type FieldDiff = {
 	key: FieldKey;
+	/** Fact title, such as Also Known As. */
+	label?: string;
 	site?: string;
 	treeviz?: string;
 	writable: boolean;

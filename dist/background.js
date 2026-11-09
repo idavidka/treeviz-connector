@@ -60,7 +60,30 @@ const trimPerson = (person) => {
         parentIds: idList(person.parentIds),
         spouseIds: idList(person.spouseIds),
         childIds: idList(person.childIds),
+        facts: factList(person.facts),
     };
+};
+const factList = (value) => {
+    if (!Array.isArray(value)) {
+        return undefined;
+    }
+    const facts = [];
+    for (const item of value) {
+        if (!item || typeof item !== "object") {
+            continue;
+        }
+        const record = item;
+        const title = String(record.title ?? "").trim();
+        const factValue = String(record.value ?? "").trim();
+        if (!title || !factValue) {
+            continue;
+        }
+        facts.push({ title, value: factValue });
+        if (facts.length >= 80) {
+            break;
+        }
+    }
+    return facts;
 };
 const idList = (value) => {
     if (!Array.isArray(value)) {

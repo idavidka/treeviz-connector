@@ -12,8 +12,8 @@ export type PanelModel = {
 	layoutKnown?: boolean;
 	sourceUrl?: string;
 	onWrite?: (keys: FieldKey[]) => void;
-	onUpdateSite?: (key: FieldKey) => void;
-	onUpdateTree?: (key: FieldKey) => void;
+	onUpdateSite?: (diff: FieldDiff) => void;
+	onUpdateTree?: (diff: FieldDiff) => void;
 	busy?: boolean;
 	status?: string;
 	relativesNote?: string;
@@ -203,7 +203,7 @@ const render = (host: HTMLElement, model: PanelModel): void => {
 			}
 			const name = document.createElement("div");
 			name.className = "k";
-			name.textContent = label(diff.key);
+			name.textContent = diff.label || label(diff.key);
 			const site = document.createElement("div");
 			site.textContent = `${sourceLabel()}: ${diff.site || "—"}`;
 			const tree = document.createElement("div");
@@ -215,7 +215,7 @@ const render = (host: HTMLElement, model: PanelModel): void => {
 				button.type = "button";
 				button.textContent = t("updateSource", { source: sourceProduct() });
 				button.disabled = Boolean(model.busy);
-				button.addEventListener("click", () => model.onUpdateSite?.(diff.key));
+				button.addEventListener("click", () => model.onUpdateSite?.(diff));
 				actions.append(button);
 			}
 			if (model.onUpdateTree && diff.site) {
@@ -224,7 +224,7 @@ const render = (host: HTMLElement, model: PanelModel): void => {
 				button.className = "alt";
 				button.textContent = t("updateTree");
 				button.disabled = Boolean(model.busy);
-				button.addEventListener("click", () => model.onUpdateTree?.(diff.key));
+				button.addEventListener("click", () => model.onUpdateTree?.(diff));
 				actions.append(button);
 			}
 			row.append(name, site, tree, actions);

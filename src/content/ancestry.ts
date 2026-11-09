@@ -5,13 +5,20 @@ import {
 	writeAncestryFacts,
 } from "../ancestry-writer.js";
 import type { SiteFacts } from "../compare.js";
-import { diffNameList, diffPerson } from "../compare.js";
+import { diffPerson, foldName, sameName } from "../compare.js";
 import { t } from "../i18n.js";
 import { connectorLog } from "../log.js";
 import { loadIndex, matchTrees, personIn, preferActive, ask } from "../match.js";
 import { parseAncestryLocation } from "../parse-url.js";
 import { showPanel, patchPanel } from "../panel.js";
-import type { AncestryBatchPerson, ConnectorPerson, ConnectorTree, FieldKey } from "../protocol.js";
+import type {
+	AncestryBatchPerson,
+	ConnectorFact,
+	ConnectorPerson,
+	ConnectorTree,
+	FieldDiff,
+	FieldKey,
+} from "../protocol.js";
 
 const cardText = (
 	cards: ReturnType<typeof readAncestryCards>,
@@ -259,28 +266,81 @@ const cardLines = (el: HTMLElement): string[] => {
 		.filter(Boolean);
 };
 
-const pushName = (names: string[], value: string): void => {
-	const name = cleanRelativeName(value);
-	if (name && name.length < 80 && !names.includes(name)) {
-		names.push(name);
+type SiteRelative = { name: string; sex?: "M" | "F" };
+
+const pushRelative = (people: SiteRelative[], person: SiteRelative): void => {
+	if (!person.name || person.name.length >= 80 || people.some((item) => item.name === person.name)) {
+		return;
 	}
+	people.push(person);
 };
 
-const namesAfter = (root: HTMLElement, start: HTMLElement, stop: string[]): string[] => {
-	const names: string[] = [];
-	for (const anchor of personAnchors(root, start, stop)) {
-		pushName(names, visibleName(anchor));
+const personCard = (anchor: HTMLElement): HTMLElement => {
+	let node = anchor;
+	while (node.parentElement) {
+		const parent = node.parentElement;
+		if (parent.querySelectorAll("a[href*='/person/']").length !== 1) {
+			break;
+		}
+		if ((parent.innerText || "").length > 220) {
+			break;
+		}
+		node = parent;
 	}
-	return names;
+	return node;
+};
+
+const sexOf = (anchor: HTMLElement): "M" | "F" | undefined => {
+	const chunks: string[] = [];
+	const card = personCard(anchor);
+	card.querySelectorAll("*").forEach((node) => {
+		for (const name of ["aria-label", "title", "alt", "src", "href", "class"]) {
+			const value = (node as HTMLElement).getAttribute?.(name);
+			if (value) {
+				chunks.push(value);
+			}
+		}
+		const image = getComputedStyle(node).backgroundImage;
+		if (image && image !== "none") {
+			chunks.push(image);
+		}
+	});
+	const blob = chunks.join(" ").toLocaleLowerCase();
+	const female =
+		/\b(female|woman|weiblich|mujer|femme|nő|no)\b/.test(blob) ||
+		/gender[_-]?f\b|silhouette[_-]f|_f_|\/f\//.test(blob);
+	const male =
+		/\b(male|man|männlich|hombre|homme|férfi|ferfi)\b/.test(blob) ||
+		/gender[_-]?m\b|silhouette[_-]m|_m_|\/m\//.test(blob);
+	if (female && !male) {
+		return "F";
+	}
+	if (male && !female) {
+		return "M";
+	}
+	return undefined;
+};
+
+const relativeFrom = (anchor: HTMLAnchorElement): SiteRelative => ({
+	name: visibleName(anchor),
+	sex: sexOf(anchor),
+});
+
+const namesAfter = (root: HTMLElement, start: HTMLElement, stop: string[]): SiteRelative[] => {
+	const people: SiteRelative[] = [];
+	for (const anchor of personAnchors(root, start, stop)) {
+		pushRelative(people, relativeFrom(anchor));
+	}
+	return people;
 };
 
 const splitHousehold = (
 	root: HTMLElement,
 	start: HTMLElement
-): { spouses: string[]; children: string[] } => {
+): { spouses: SiteRelative[]; children: SiteRelative[] } => {
 	const anchors = personAnchors(root, start, []);
-	const spouses: string[] = [];
-	const children: string[] = [];
+	const spouses: SiteRelative[] = [];
+	const children: SiteRelative[] = [];
 	for (const anchor of anchors) {
 		const lines = cardLines(anchor);
 		const lifespan = lines.slice(1).some((line) => LIFESPAN.test(line));
@@ -296,7 +356,7 @@ const splitHousehold = (
 			}
 			node = node.parentElement;
 		}
-		pushName(lifespan || nested ? children : spouses, visibleName(anchor));
+		pushRelative(lifespan || nested ? children : spouses, relativeFrom(anchor));
 	}
 	return { spouses, children };
 };
@@ -341,20 +401,20 @@ const sectionLines = (heading: HTMLElement, stop: string[]): string[] => {
 	return kept;
 };
 
-const linesAfter = (heading: HTMLElement, stop: string[]): string[] => {
-	const names: string[] = [];
+const linesAfter = (heading: HTMLElement, stop: string[]): SiteRelative[] => {
+	const people: SiteRelative[] = [];
 	for (const line of sectionLines(heading, stop)) {
 		if (LIFESPAN.test(line)) {
 			continue;
 		}
-		pushName(names, line);
+		pushRelative(people, { name: cleanRelativeName(line) });
 	}
-	return names;
+	return people;
 };
 
-const splitLines = (lines: string[]): { spouses: string[]; children: string[] } => {
-	const spouses: string[] = [];
-	const children: string[] = [];
+const splitLines = (lines: string[]): { spouses: SiteRelative[]; children: SiteRelative[] } => {
+	const spouses: SiteRelative[] = [];
+	const children: SiteRelative[] = [];
 	for (let index = 0; index < lines.length; index += 1) {
 		const line = lines[index];
 		if (LIFESPAN.test(line)) {
@@ -365,15 +425,15 @@ const splitLines = (lines: string[]): { spouses: string[]; children: string[] } 
 			continue;
 		}
 		const next = lines[index + 1];
-		pushName(next && LIFESPAN.test(next) ? children : spouses, name);
+		pushRelative(next && LIFESPAN.test(next) ? children : spouses, { name });
 	}
 	return { spouses, children };
 };
 
 const readRelatives = (): {
-	parents: string[];
-	spouses: string[];
-	children: string[];
+	parents: SiteRelative[];
+	spouses: SiteRelative[];
+	children: SiteRelative[];
 	parentsFound: boolean;
 	householdFound: boolean;
 } => {
@@ -406,11 +466,150 @@ const readRelatives = (): {
 	};
 };
 
-const namesFor = (tree: ConnectorTree, ids?: string[]): string[] => {
-	if (!ids) {
-		return [];
+const SKIP_FACT_TITLES = new Set([
+	"name",
+	"név",
+	"nev",
+	"gender",
+	"sex",
+	"nem",
+	"birth",
+	"születés",
+	"szuletes",
+	"death",
+	"halál",
+	"halal",
+	"marriage",
+	"házasság",
+	"hazassag",
+	"parents",
+	"szülők",
+	"spouse and children",
+	"relationships",
+	"timeline",
+	"sources",
+	"facts",
+	"possible birth records",
+	"add fact",
+	"add source",
+	"add web link",
+	"add family",
+	"search on ancestry",
+]);
+
+const readPageFacts = (): ConnectorFact[] => {
+	const facts: ConnectorFact[] = [];
+	const seen = new Set<string>();
+	const relationships = relationshipsRoot();
+	document.querySelectorAll("div, li, article, section").forEach((node) => {
+		const el = node as HTMLElement;
+		if (el.closest("#treeviz-connector-root") || (relationships && relationships.contains(el))) {
+			return;
+		}
+		const text = el.innerText?.trim() ?? "";
+		if (!text || text.length > 140 || !text.includes("\n")) {
+			return;
+		}
+		if (Array.from(el.children).some((child) => (child as HTMLElement).innerText?.trim() === text)) {
+			return;
+		}
+		const lines = text
+			.split("\n")
+			.map((line) => line.trim())
+			.filter((line) => line && !/^edit$/i.test(line));
+		if (lines.length < 2 || lines.length > 4) {
+			return;
+		}
+		const title = lines[0].replace(/\s+edit$/i, "").trim();
+		const key = title.toLocaleLowerCase();
+		if (!title || title.length > 40 || SKIP_FACT_TITLES.has(key)) {
+			return;
+		}
+		if (/\bof\s+(?:a\s+|an\s+|the\s+)?(?:son|daughter|child|father|mother|husband|wife|spouse|parent)\b/i.test(title)) {
+			return;
+		}
+		const value = lines.slice(1).join(", ").trim();
+		if (!value || value.length > 100) {
+			return;
+		}
+		const id = `${foldName(title)}|${foldName(value)}`;
+		if (seen.has(id)) {
+			return;
+		}
+		seen.add(id);
+		facts.push({ title, value });
+	});
+	return facts;
+};
+
+const factDiffs = (siteFacts: ConnectorFact[], treeFacts: ConnectorFact[]): FieldDiff[] => {
+	const titles = new Map<string, string>();
+	for (const fact of [...siteFacts, ...treeFacts]) {
+		const key = foldName(fact.title);
+		if (key && !titles.has(key)) {
+			titles.set(key, fact.title);
+		}
 	}
-	return ids.map((id) => personIn(tree, id)?.name || id);
+	const diffs: FieldDiff[] = [];
+	for (const [key, title] of titles) {
+		const siteValues = siteFacts
+			.filter((fact) => foldName(fact.title) === key)
+			.map((fact) => fact.value);
+		const treeValues = treeFacts
+			.filter((fact) => foldName(fact.title) === key)
+			.map((fact) => fact.value);
+		for (const value of siteValues) {
+			if (treeValues.some((treeValue) => sameName(treeValue, value))) {
+				continue;
+			}
+			diffs.push({ key: "fact", label: title, site: value, writable: false });
+		}
+		for (const value of treeValues) {
+			if (siteValues.some((siteValue) => sameName(siteValue, value))) {
+				continue;
+			}
+			diffs.push({ key: "fact", label: title, treeviz: value, writable: false });
+		}
+	}
+	return diffs;
+};
+
+const treeRelatives = (tree: ConnectorTree, ids?: string[]): SiteRelative[] =>
+	(ids ?? []).map((id) => {
+		const found = personIn(tree, id);
+		const sex = found?.sex === "M" || found?.sex === "F" ? found.sex : undefined;
+		return { name: found?.name || id, sex };
+	});
+
+const sexWord = (sex?: "M" | "F"): string =>
+	sex === "F" ? t("female") : sex === "M" ? t("male") : "";
+
+const relativeDiff = (
+	key: "parents" | "spouses" | "children",
+	sitePeople: SiteRelative[],
+	treePeople: SiteRelative[]
+): FieldDiff | undefined => {
+	const siteOnly = sitePeople.filter(
+		(sitePerson) => !treePeople.some((treePerson) => sameName(treePerson.name, sitePerson.name))
+	);
+	const treeOnly = treePeople.filter(
+		(treePerson) => !sitePeople.some((sitePerson) => sameName(sitePerson.name, treePerson.name))
+	);
+	const sexMismatch = sitePeople.filter((sitePerson) => {
+		const match = treePeople.find((treePerson) => sameName(treePerson.name, sitePerson.name));
+		return Boolean(match && sitePerson.sex && match.sex !== sitePerson.sex);
+	});
+	if (!siteOnly.length && !treeOnly.length && !sexMismatch.length) {
+		return undefined;
+	}
+	const siteLabel = (person: SiteRelative): string =>
+		person.sex ? `${person.name} (${sexWord(person.sex)})` : person.name;
+	return {
+		key,
+		site: [...siteOnly, ...sexMismatch].map(siteLabel).join(", ") || undefined,
+		treeviz: [...treeOnly.map((person) => person.name), ...sexMismatch.map((person) => person.name)].join(", ") || undefined,
+		writable: false,
+	};
 };
 
 const dateSibling = (site: SiteFacts, key: FieldKey): string | undefined => {
@@ -442,28 +641,33 @@ const showTree = (tree: ConnectorTree, personId: string, cachedAt?: number): voi
 	}
 	const site = siteFacts();
 	const relatives = readRelatives();
+	const pageFacts = readPageFacts();
+	const factsKnown = Array.isArray(person.facts);
 	const diffs = diffPerson(site, person, writableOnAncestry);
+	if (factsKnown) {
+		diffs.push(...factDiffs(pageFacts, person.facts ?? []));
+	}
 	const relativesKnown = Array.isArray(person.parentIds);
 	if (relativesKnown && relatives.parentsFound) {
-		const parentDiff = diffNameList(
+		const parentDiff = relativeDiff(
 			"parents",
 			relatives.parents,
-			namesFor(tree, person.parentIds)
+			treeRelatives(tree, person.parentIds)
 		);
 		if (parentDiff) {
 			diffs.push(parentDiff);
 		}
 	}
 	if (relativesKnown && relatives.householdFound) {
-		const spouseDiff = diffNameList(
+		const spouseDiff = relativeDiff(
 			"spouses",
 			relatives.spouses,
-			namesFor(tree, person.spouseIds)
+			treeRelatives(tree, person.spouseIds)
 		);
-		const childDiff = diffNameList(
+		const childDiff = relativeDiff(
 			"children",
 			relatives.children,
-			namesFor(tree, person.childIds)
+			treeRelatives(tree, person.childIds)
 		);
 		if (spouseDiff) {
 			diffs.push(spouseDiff);
@@ -481,6 +685,8 @@ const showTree = (tree: ConnectorTree, personId: string, cachedAt?: number): voi
 		edit: Boolean(document.querySelector("#FactEditComponent")),
 		relatives,
 		relativesKnown,
+		pageFacts,
+		factsKnown,
 		diffs: diffs.map((diff) => ({
 			key: diff.key,
 			site: diff.site,
@@ -493,32 +699,53 @@ const showTree = (tree: ConnectorTree, personId: string, cachedAt?: number): voi
 		detail: t("inTree", { tree: tree.name }),
 		cachedAt,
 		diffs,
-		relativesNote:
+		relativesNote: [
 			!relativesKnown && (relatives.parentsFound || relatives.householdFound)
 				? t("relativesStale")
-				: undefined,
+				: "",
+			!factsKnown && pageFacts.length ? t("factsStale") : "",
+		]
+			.filter(Boolean)
+			.join(" "),
 		layoutKnown: site.layoutKnown,
-		onUpdateSite: (key) => {
-			if (key === "parents" || key === "spouses" || key === "children") {
+		onUpdateSite: (diff) => {
+			if (
+				diff.key === "parents" ||
+				diff.key === "spouses" ||
+				diff.key === "children"
+			) {
 				patchPanel({ status: t("relativesNotWritten") });
 				return;
 			}
-			if (!writableOnAncestry(key)) {
+			if (diff.key === "fact") {
+				patchPanel({ status: t("factNotWritten") });
+				return;
+			}
+			if (!writableOnAncestry(diff.key)) {
 				patchPanel({ status: t("layout") });
 				return;
 			}
-			void writeSelected(person, site, [key]);
+			void writeSelected(person, site, [diff.key]);
 		},
-		onUpdateTree: (key) => {
-			const diff = diffs.find((item) => item.key === key);
+		onUpdateTree: (diff) => {
 			patchPanel({ busy: true });
+			const people =
+				diff.key === "parents"
+					? relatives.parents
+					: diff.key === "spouses"
+						? relatives.spouses
+						: diff.key === "children"
+							? relatives.children
+							: undefined;
 			void ask({
 				type: "connector:update-treeviz",
 				sourcePersonId: person.sourcePersonId,
 				sourceTreeId: tree.sourceTreeId,
-				key,
-				site: diff?.site,
-				treeviz: diff?.treeviz,
+				key: diff.key,
+				label: diff.label,
+				site: diff.site,
+				treeviz: diff.treeviz,
+				people,
 			}).then((response) => {
 				const code = String(response.code ?? "");
 				const names = String(response.names ?? "");

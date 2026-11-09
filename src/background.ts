@@ -7,6 +7,7 @@ import {
 	type AncestryBatch,
 	type AncestryBatchPerson,
 	type ConnectorIndex,
+	type ConnectorFact,
 	type ConnectorPerson,
 	type ConnectorTree,
 } from "./protocol.js";
@@ -82,7 +83,31 @@ const trimPerson = (person: ConnectorPerson): ConnectorPerson | undefined => {
 		parentIds: idList(person.parentIds),
 		spouseIds: idList(person.spouseIds),
 		childIds: idList(person.childIds),
+		facts: factList(person.facts),
 	};
+};
+
+const factList = (value: unknown): ConnectorFact[] | undefined => {
+	if (!Array.isArray(value)) {
+		return undefined;
+	}
+	const facts: ConnectorFact[] = [];
+	for (const item of value) {
+		if (!item || typeof item !== "object") {
+			continue;
+		}
+		const record = item as { title?: unknown; value?: unknown };
+		const title = String(record.title ?? "").trim();
+		const factValue = String(record.value ?? "").trim();
+		if (!title || !factValue) {
+			continue;
+		}
+		facts.push({ title, value: factValue });
+		if (facts.length >= 80) {
+			break;
+		}
+	}
+	return facts;
 };
 
 const idList = (value: unknown): string[] | undefined => {

@@ -252,6 +252,8 @@
     offline: "Az \xEDr\xE1s h\xE1l\xF3zatot ig\xE9nyel.",
     name: "N\xE9v",
     sex: "Nem",
+    female: "n\u0151",
+    male: "f\xE9rfi",
     birthDate: "Sz\xFClet\xE9s d\xE1tuma",
     birthPlace: "Sz\xFClet\xE9s helye",
     deathDate: "Hal\xE1l d\xE1tuma",
@@ -261,6 +263,9 @@
     parents: "Sz\xFCl\u0151k",
     spouses: "H\xE1zast\xE1rsak",
     children: "Gyerekek",
+    fact: "T\xE9ny",
+    factsStale: "A TreeViz-adatban m\xE9g nincsenek a tov\xE1bbi t\xE9nyek. Friss\xEDtsd a TreeViz lapot, hogy \xFAjra elk\xFCldje a f\xE1t.",
+    factNotWritten: "Ezt a t\xE9nyt ezen az elrendez\xE9sen m\xE9g nem \xEDrja a forr\xE1s oldalra.",
     relativesStale: "A TreeViz-adatban m\xE9g nincsenek rokonok. Friss\xEDtsd a TreeViz lapot, hogy \xFAjra elk\xFCldje a f\xE1t.",
     missingFact: "A t\xE9ny nem tal\xE1lhat\xF3 az oldalon.",
     batchDone: "Az Ancestry-friss\xEDt\xE9s k\xE9sz.",
@@ -306,6 +311,8 @@
     offline: "Writing needs a network connection.",
     name: "Name",
     sex: "Sex",
+    female: "female",
+    male: "male",
     birthDate: "Birth date",
     birthPlace: "Birth place",
     deathDate: "Death date",
@@ -315,6 +322,9 @@
     parents: "Parents",
     spouses: "Spouses",
     children: "Children",
+    fact: "Fact",
+    factsStale: "This TreeViz data has no other facts yet. Refresh the TreeViz tab so it sends the tree again.",
+    factNotWritten: "This fact is not written to the source site on this layout.",
     relativesStale: "This TreeViz data has no relatives yet. Refresh the TreeViz tab so it sends the tree again.",
     missingFact: "The fact is not on this page.",
     batchDone: "The Ancestry update is finished.",
@@ -638,7 +648,7 @@
         }
         const name = document.createElement("div");
         name.className = "k";
-        name.textContent = label(diff.key);
+        name.textContent = diff.label || label(diff.key);
         const site = document.createElement("div");
         site.textContent = `${sourceLabel()}: ${diff.site || "\u2014"}`;
         const tree = document.createElement("div");
@@ -650,7 +660,7 @@
           button.type = "button";
           button.textContent = t("updateSource", { source: sourceProduct() });
           button.disabled = Boolean(model.busy);
-          button.addEventListener("click", () => model.onUpdateSite?.(diff.key));
+          button.addEventListener("click", () => model.onUpdateSite?.(diff));
           actions.append(button);
         }
         if (model.onUpdateTree && diff.site) {
@@ -659,7 +669,7 @@
           button.className = "alt";
           button.textContent = t("updateTree");
           button.disabled = Boolean(model.busy);
-          button.addEventListener("click", () => model.onUpdateTree?.(diff.key));
+          button.addEventListener("click", () => model.onUpdateTree?.(diff));
           actions.append(button);
         }
         row.append(name, site, tree, actions);
@@ -944,19 +954,19 @@
       diffs: sameForm ? diffs : void 0,
       layoutKnown: sameForm ? true : void 0,
       status: sameForm ? void 0 : t("openEdit"),
-      onUpdateSite: sameForm ? (key) => {
-        void writeSelected(person, [key]);
+      onUpdateSite: sameForm ? (diff) => {
+        void writeSelected(person, [diff.key]);
       } : void 0,
-      onUpdateTree: (key) => {
-        const diff = diffs.find((item) => item.key === key);
+      onUpdateTree: (diff) => {
         patchPanel({ busy: true });
         void ask({
           type: "connector:update-treeviz",
           sourcePersonId: person.sourcePersonId,
           sourceTreeId: tree.sourceTreeId,
-          key,
-          site: diff?.site,
-          treeviz: diff?.treeviz
+          key: diff.key,
+          label: diff.label,
+          site: diff.site,
+          treeviz: diff.treeviz
         }).then((response) => {
           const code = String(response.code ?? "");
           const names = String(response.names ?? "");

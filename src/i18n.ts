@@ -32,6 +32,8 @@ const HU = {
 	offline: "Az írás hálózatot igényel.",
 	name: "Név",
 	sex: "Nem",
+	female: "nő",
+	male: "férfi",
 	birthDate: "Születés dátuma",
 	birthPlace: "Születés helye",
 	deathDate: "Halál dátuma",
@@ -41,6 +43,10 @@ const HU = {
 	parents: "Szülők",
 	spouses: "Házastársak",
 	children: "Gyerekek",
+	fact: "Tény",
+	factsStale:
+		"A TreeViz-adatban még nincsenek a további tények. Frissítsd a TreeViz lapot, hogy újra elküldje a fát.",
+	factNotWritten: "Ezt a tényt ezen az elrendezésen még nem írja a forrás oldalra.",
 	relativesStale:
 		"A TreeViz-adatban még nincsenek rokonok. Frissítsd a TreeViz lapot, hogy újra elküldje a fát.",
 	missingFact: "A tény nem található az oldalon.",
@@ -89,6 +95,8 @@ const EN: typeof HU = {
 	offline: "Writing needs a network connection.",
 	name: "Name",
 	sex: "Sex",
+	female: "female",
+	male: "male",
 	birthDate: "Birth date",
 	birthPlace: "Birth place",
 	deathDate: "Death date",
@@ -98,6 +106,10 @@ const EN: typeof HU = {
 	parents: "Parents",
 	spouses: "Spouses",
 	children: "Children",
+	fact: "Fact",
+	factsStale:
+		"This TreeViz data has no other facts yet. Refresh the TreeViz tab so it sends the tree again.",
+	factNotWritten: "This fact is not written to the source site on this layout.",
 	relativesStale:
 		"This TreeViz data has no relatives yet. Refresh the TreeViz tab so it sends the tree again.",
 	missingFact: "The fact is not on this page.",

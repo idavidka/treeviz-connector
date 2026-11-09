@@ -101,23 +101,6 @@
     }
     return a.split(" ").sort().join(" ") === b.split(" ").sort().join(" ");
   };
-  var diffNameList = (key, siteNames, treeNames) => {
-    const unmatchedSite = siteNames.filter(
-      (siteName) => !treeNames.some((treeName) => sameName(siteName, treeName))
-    );
-    const unmatchedTree = treeNames.filter(
-      (treeName) => !siteNames.some((siteName) => sameName(siteName, treeName))
-    );
-    if (!unmatchedSite.length && !unmatchedTree.length) {
-      return void 0;
-    }
-    return {
-      key,
-      site: siteNames.join(", ") || void 0,
-      treeviz: treeNames.join(", ") || void 0,
-      writable: false
-    };
-  };
   var sameText = (left, right) => collapse(left).toLocaleLowerCase() === collapse(right).toLocaleLowerCase();
   var parseLooseDate = (value) => {
     const text = collapse(value);
@@ -543,6 +526,8 @@
     offline: "Az \xEDr\xE1s h\xE1l\xF3zatot ig\xE9nyel.",
     name: "N\xE9v",
     sex: "Nem",
+    female: "n\u0151",
+    male: "f\xE9rfi",
     birthDate: "Sz\xFClet\xE9s d\xE1tuma",
     birthPlace: "Sz\xFClet\xE9s helye",
     deathDate: "Hal\xE1l d\xE1tuma",
@@ -552,6 +537,9 @@
     parents: "Sz\xFCl\u0151k",
     spouses: "H\xE1zast\xE1rsak",
     children: "Gyerekek",
+    fact: "T\xE9ny",
+    factsStale: "A TreeViz-adatban m\xE9g nincsenek a tov\xE1bbi t\xE9nyek. Friss\xEDtsd a TreeViz lapot, hogy \xFAjra elk\xFCldje a f\xE1t.",
+    factNotWritten: "Ezt a t\xE9nyt ezen az elrendez\xE9sen m\xE9g nem \xEDrja a forr\xE1s oldalra.",
     relativesStale: "A TreeViz-adatban m\xE9g nincsenek rokonok. Friss\xEDtsd a TreeViz lapot, hogy \xFAjra elk\xFCldje a f\xE1t.",
     missingFact: "A t\xE9ny nem tal\xE1lhat\xF3 az oldalon.",
     batchDone: "Az Ancestry-friss\xEDt\xE9s k\xE9sz.",
@@ -597,6 +585,8 @@
     offline: "Writing needs a network connection.",
     name: "Name",
     sex: "Sex",
+    female: "female",
+    male: "male",
     birthDate: "Birth date",
     birthPlace: "Birth place",
     deathDate: "Death date",
@@ -606,6 +596,9 @@
     parents: "Parents",
     spouses: "Spouses",
     children: "Children",
+    fact: "Fact",
+    factsStale: "This TreeViz data has no other facts yet. Refresh the TreeViz tab so it sends the tree again.",
+    factNotWritten: "This fact is not written to the source site on this layout.",
     relativesStale: "This TreeViz data has no relatives yet. Refresh the TreeViz tab so it sends the tree again.",
     missingFact: "The fact is not on this page.",
     batchDone: "The Ancestry update is finished.",
@@ -870,7 +863,7 @@
         }
         const name = document.createElement("div");
         name.className = "k";
-        name.textContent = label(diff.key);
+        name.textContent = diff.label || label(diff.key);
         const site = document.createElement("div");
         site.textContent = `${sourceLabel()}: ${diff.site || "\u2014"}`;
         const tree = document.createElement("div");
@@ -882,7 +875,7 @@
           button.type = "button";
           button.textContent = t("updateSource", { source: sourceProduct() });
           button.disabled = Boolean(model.busy);
-          button.addEventListener("click", () => model.onUpdateSite?.(diff.key));
+          button.addEventListener("click", () => model.onUpdateSite?.(diff));
           actions.append(button);
         }
         if (model.onUpdateTree && diff.site) {
@@ -891,7 +884,7 @@
           button.className = "alt";
           button.textContent = t("updateTree");
           button.disabled = Boolean(model.busy);
-          button.addEventListener("click", () => model.onUpdateTree?.(diff.key));
+          button.addEventListener("click", () => model.onUpdateTree?.(diff));
           actions.append(button);
         }
         row.append(name, site, tree, actions);
@@ -1204,18 +1197,62 @@
     }
     return (node.innerText || "").split("\n").map((line) => line.trim()).filter(Boolean);
   };
-  var pushName = (names, value) => {
-    const name = cleanRelativeName(value);
-    if (name && name.length < 80 && !names.includes(name)) {
-      names.push(name);
+  var pushRelative = (people, person) => {
+    if (!person.name || person.name.length >= 80 || people.some((item) => item.name === person.name)) {
+      return;
     }
+    people.push(person);
   };
-  var namesAfter = (root, start, stop) => {
-    const names = [];
-    for (const anchor of personAnchors(root, start, stop)) {
-      pushName(names, visibleName(anchor));
+  var personCard = (anchor) => {
+    let node = anchor;
+    while (node.parentElement) {
+      const parent = node.parentElement;
+      if (parent.querySelectorAll("a[href*='/person/']").length !== 1) {
+        break;
+      }
+      if ((parent.innerText || "").length > 220) {
+        break;
+      }
+      node = parent;
     }
-    return names;
+    return node;
+  };
+  var sexOf = (anchor) => {
+    const chunks = [];
+    const card = personCard(anchor);
+    card.querySelectorAll("*").forEach((node) => {
+      for (const name of ["aria-label", "title", "alt", "src", "href", "class"]) {
+        const value = node.getAttribute?.(name);
+        if (value) {
+          chunks.push(value);
+        }
+      }
+      const image = getComputedStyle(node).backgroundImage;
+      if (image && image !== "none") {
+        chunks.push(image);
+      }
+    });
+    const blob = chunks.join(" ").toLocaleLowerCase();
+    const female = /\b(female|woman|weiblich|mujer|femme|nő|no)\b/.test(blob) || /gender[_-]?f\b|silhouette[_-]f|_f_|\/f\//.test(blob);
+    const male = /\b(male|man|männlich|hombre|homme|férfi|ferfi)\b/.test(blob) || /gender[_-]?m\b|silhouette[_-]m|_m_|\/m\//.test(blob);
+    if (female && !male) {
+      return "F";
+    }
+    if (male && !female) {
+      return "M";
+    }
+    return void 0;
+  };
+  var relativeFrom = (anchor) => ({
+    name: visibleName(anchor),
+    sex: sexOf(anchor)
+  });
+  var namesAfter = (root, start, stop) => {
+    const people = [];
+    for (const anchor of personAnchors(root, start, stop)) {
+      pushRelative(people, relativeFrom(anchor));
+    }
+    return people;
   };
   var splitHousehold = (root, start) => {
     const anchors = personAnchors(root, start, []);
@@ -1236,7 +1273,7 @@
         }
         node = node.parentElement;
       }
-      pushName(lifespan || nested ? children : spouses, visibleName(anchor));
+      pushRelative(lifespan || nested ? children : spouses, relativeFrom(anchor));
     }
     return { spouses, children };
   };
@@ -1271,14 +1308,14 @@
     return kept;
   };
   var linesAfter = (heading, stop) => {
-    const names = [];
+    const people = [];
     for (const line of sectionLines(heading, stop)) {
       if (LIFESPAN.test(line)) {
         continue;
       }
-      pushName(names, line);
+      pushRelative(people, { name: cleanRelativeName(line) });
     }
-    return names;
+    return people;
   };
   var splitLines = (lines2) => {
     const spouses = [];
@@ -1293,7 +1330,7 @@
         continue;
       }
       const next = lines2[index + 1];
-      pushName(next && LIFESPAN.test(next) ? children : spouses, name);
+      pushRelative(next && LIFESPAN.test(next) ? children : spouses, { name });
     }
     return { spouses, children };
   };
@@ -1322,11 +1359,131 @@
       householdFound: Boolean(householdHeading)
     };
   };
-  var namesFor = (tree, ids) => {
-    if (!ids) {
-      return [];
+  var SKIP_FACT_TITLES = /* @__PURE__ */ new Set([
+    "name",
+    "n\xE9v",
+    "nev",
+    "gender",
+    "sex",
+    "nem",
+    "birth",
+    "sz\xFClet\xE9s",
+    "szuletes",
+    "death",
+    "hal\xE1l",
+    "halal",
+    "marriage",
+    "h\xE1zass\xE1g",
+    "hazassag",
+    "parents",
+    "sz\xFCl\u0151k",
+    "spouse and children",
+    "relationships",
+    "timeline",
+    "sources",
+    "facts",
+    "possible birth records",
+    "add fact",
+    "add source",
+    "add web link",
+    "add family",
+    "search on ancestry"
+  ]);
+  var readPageFacts = () => {
+    const facts = [];
+    const seen = /* @__PURE__ */ new Set();
+    const relationships = relationshipsRoot();
+    document.querySelectorAll("div, li, article, section").forEach((node) => {
+      const el = node;
+      if (el.closest("#treeviz-connector-root") || relationships && relationships.contains(el)) {
+        return;
+      }
+      const text = el.innerText?.trim() ?? "";
+      if (!text || text.length > 140 || !text.includes("\n")) {
+        return;
+      }
+      if (Array.from(el.children).some((child) => child.innerText?.trim() === text)) {
+        return;
+      }
+      const lines2 = text.split("\n").map((line) => line.trim()).filter((line) => line && !/^edit$/i.test(line));
+      if (lines2.length < 2 || lines2.length > 4) {
+        return;
+      }
+      const title = lines2[0].replace(/\s+edit$/i, "").trim();
+      const key = title.toLocaleLowerCase();
+      if (!title || title.length > 40 || SKIP_FACT_TITLES.has(key)) {
+        return;
+      }
+      if (/\bof\s+(?:a\s+|an\s+|the\s+)?(?:son|daughter|child|father|mother|husband|wife|spouse|parent)\b/i.test(title)) {
+        return;
+      }
+      const value = lines2.slice(1).join(", ").trim();
+      if (!value || value.length > 100) {
+        return;
+      }
+      const id = `${foldName(title)}|${foldName(value)}`;
+      if (seen.has(id)) {
+        return;
+      }
+      seen.add(id);
+      facts.push({ title, value });
+    });
+    return facts;
+  };
+  var factDiffs = (siteFacts2, treeFacts) => {
+    const titles = /* @__PURE__ */ new Map();
+    for (const fact of [...siteFacts2, ...treeFacts]) {
+      const key = foldName(fact.title);
+      if (key && !titles.has(key)) {
+        titles.set(key, fact.title);
+      }
     }
-    return ids.map((id) => personIn(tree, id)?.name || id);
+    const diffs = [];
+    for (const [key, title] of titles) {
+      const siteValues = siteFacts2.filter((fact) => foldName(fact.title) === key).map((fact) => fact.value);
+      const treeValues = treeFacts.filter((fact) => foldName(fact.title) === key).map((fact) => fact.value);
+      for (const value of siteValues) {
+        if (treeValues.some((treeValue2) => sameName(treeValue2, value))) {
+          continue;
+        }
+        diffs.push({ key: "fact", label: title, site: value, writable: false });
+      }
+      for (const value of treeValues) {
+        if (siteValues.some((siteValue2) => sameName(siteValue2, value))) {
+          continue;
+        }
+        diffs.push({ key: "fact", label: title, treeviz: value, writable: false });
+      }
+    }
+    return diffs;
+  };
+  var treeRelatives = (tree, ids) => (ids ?? []).map((id) => {
+    const found = personIn(tree, id);
+    const sex = found?.sex === "M" || found?.sex === "F" ? found.sex : void 0;
+    return { name: found?.name || id, sex };
+  });
+  var sexWord = (sex) => sex === "F" ? t("female") : sex === "M" ? t("male") : "";
+  var relativeDiff = (key, sitePeople, treePeople) => {
+    const siteOnly = sitePeople.filter(
+      (sitePerson) => !treePeople.some((treePerson) => sameName(treePerson.name, sitePerson.name))
+    );
+    const treeOnly = treePeople.filter(
+      (treePerson) => !sitePeople.some((sitePerson) => sameName(sitePerson.name, treePerson.name))
+    );
+    const sexMismatch = sitePeople.filter((sitePerson) => {
+      const match = treePeople.find((treePerson) => sameName(treePerson.name, sitePerson.name));
+      return Boolean(match && sitePerson.sex && match.sex !== sitePerson.sex);
+    });
+    if (!siteOnly.length && !treeOnly.length && !sexMismatch.length) {
+      return void 0;
+    }
+    const siteLabel = (person) => person.sex ? `${person.name} (${sexWord(person.sex)})` : person.name;
+    return {
+      key,
+      site: [...siteOnly, ...sexMismatch].map(siteLabel).join(", ") || void 0,
+      treeviz: [...treeOnly.map((person) => person.name), ...sexMismatch.map((person) => person.name)].join(", ") || void 0,
+      writable: false
+    };
   };
   var dateSibling = (site, key) => {
     if (key.startsWith("birth")) return site.birthDate;
@@ -1356,28 +1513,33 @@
     }
     const site = siteFacts();
     const relatives = readRelatives();
+    const pageFacts = readPageFacts();
+    const factsKnown = Array.isArray(person.facts);
     const diffs = diffPerson(site, person, writableOnAncestry);
+    if (factsKnown) {
+      diffs.push(...factDiffs(pageFacts, person.facts ?? []));
+    }
     const relativesKnown = Array.isArray(person.parentIds);
     if (relativesKnown && relatives.parentsFound) {
-      const parentDiff = diffNameList(
+      const parentDiff = relativeDiff(
         "parents",
         relatives.parents,
-        namesFor(tree, person.parentIds)
+        treeRelatives(tree, person.parentIds)
       );
       if (parentDiff) {
         diffs.push(parentDiff);
       }
     }
     if (relativesKnown && relatives.householdFound) {
-      const spouseDiff = diffNameList(
+      const spouseDiff = relativeDiff(
         "spouses",
         relatives.spouses,
-        namesFor(tree, person.spouseIds)
+        treeRelatives(tree, person.spouseIds)
       );
-      const childDiff = diffNameList(
+      const childDiff = relativeDiff(
         "children",
         relatives.children,
-        namesFor(tree, person.childIds)
+        treeRelatives(tree, person.childIds)
       );
       if (spouseDiff) {
         diffs.push(spouseDiff);
@@ -1395,6 +1557,8 @@
       edit: Boolean(document.querySelector("#FactEditComponent")),
       relatives,
       relativesKnown,
+      pageFacts,
+      factsKnown,
       diffs: diffs.map((diff) => ({
         key: diff.key,
         site: diff.site,
@@ -1407,29 +1571,38 @@
       detail: t("inTree", { tree: tree.name }),
       cachedAt,
       diffs,
-      relativesNote: !relativesKnown && (relatives.parentsFound || relatives.householdFound) ? t("relativesStale") : void 0,
+      relativesNote: [
+        !relativesKnown && (relatives.parentsFound || relatives.householdFound) ? t("relativesStale") : "",
+        !factsKnown && pageFacts.length ? t("factsStale") : ""
+      ].filter(Boolean).join(" "),
       layoutKnown: site.layoutKnown,
-      onUpdateSite: (key) => {
-        if (key === "parents" || key === "spouses" || key === "children") {
+      onUpdateSite: (diff) => {
+        if (diff.key === "parents" || diff.key === "spouses" || diff.key === "children") {
           patchPanel({ status: t("relativesNotWritten") });
           return;
         }
-        if (!writableOnAncestry(key)) {
+        if (diff.key === "fact") {
+          patchPanel({ status: t("factNotWritten") });
+          return;
+        }
+        if (!writableOnAncestry(diff.key)) {
           patchPanel({ status: t("layout") });
           return;
         }
-        void writeSelected(person, site, [key]);
+        void writeSelected(person, site, [diff.key]);
       },
-      onUpdateTree: (key) => {
-        const diff = diffs.find((item) => item.key === key);
+      onUpdateTree: (diff) => {
         patchPanel({ busy: true });
+        const people = diff.key === "parents" ? relatives.parents : diff.key === "spouses" ? relatives.spouses : diff.key === "children" ? relatives.children : void 0;
         void ask({
           type: "connector:update-treeviz",
           sourcePersonId: person.sourcePersonId,
           sourceTreeId: tree.sourceTreeId,
-          key,
-          site: diff?.site,
-          treeviz: diff?.treeviz
+          key: diff.key,
+          label: diff.label,
+          site: diff.site,
+          treeviz: diff.treeviz,
+          people
         }).then((response) => {
           const code = String(response.code ?? "");
           const names = String(response.names ?? "");
