@@ -432,7 +432,7 @@
       if (tree.source !== source) {
         return false;
       }
-      if (sourceTreeId && tree.sourceTreeId && tree.sourceTreeId !== sourceTreeId) {
+      if (sourceTreeId && tree.sourceTreeId && sourceTreeId.toLowerCase() !== tree.sourceTreeId.toLowerCase()) {
         return false;
       }
       return tree.persons.some((person) => person.sourcePersonId === id);
@@ -470,6 +470,13 @@
         personId: profile[2],
         kind: "profile"
       };
+    }
+    if (/edit-profile\.php/i.test(url.pathname)) {
+      const siteId = url.searchParams.get("s") || void 0;
+      const personId = url.searchParams.get("indID") || url.searchParams.get("individualID") || void 0;
+      if (siteId && personId) {
+        return { site: "myheritage", siteId, personId, kind: "profile" };
+      }
     }
     const tree = url.pathname.match(MH_TREE);
     if (tree) {

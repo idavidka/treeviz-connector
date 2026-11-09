@@ -41,6 +41,15 @@ export const parseMyHeritageLocation = (href) => {
             kind: "profile",
         };
     }
+    if (/edit-profile\.php/i.test(url.pathname)) {
+        const siteId = url.searchParams.get("s") || undefined;
+        const personId = url.searchParams.get("indID") ||
+            url.searchParams.get("individualID") ||
+            undefined;
+        if (siteId && personId) {
+            return { site: "myheritage", siteId, personId, kind: "profile" };
+        }
+    }
     const tree = url.pathname.match(MH_TREE);
     if (tree) {
         return { site: "myheritage", siteId: tree[1], kind: "tree" };

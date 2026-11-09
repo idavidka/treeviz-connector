@@ -662,7 +662,7 @@
       if (tree.source !== source) {
         return false;
       }
-      if (sourceTreeId && tree.sourceTreeId && tree.sourceTreeId !== sourceTreeId) {
+      if (sourceTreeId && tree.sourceTreeId && sourceTreeId.toLowerCase() !== tree.sourceTreeId.toLowerCase()) {
         return false;
       }
       return tree.persons.some((person) => person.sourcePersonId === id);
