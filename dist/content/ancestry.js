@@ -100,7 +100,8 @@
   var foldName = (value) => collapse(value).normalize("NFD").replace(/\p{Diacritic}/gu, "").toLocaleLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   var FACT_TITLE_ALIASES = {
     aka: "also known as",
-    "also known": "also known as"
+    "also known": "also known as",
+    "e mail": "email"
   };
   var factTitleKey = (title) => {
     const key = foldName(title);

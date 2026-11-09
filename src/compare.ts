@@ -112,6 +112,7 @@ export const foldName = (value?: string): string =>
 const FACT_TITLE_ALIASES: Record<string, string> = {
 	aka: "also known as",
 	"also known": "also known as",
+	"e mail": "email",
 };
 
 /** Same fact under Ancestry's label and the GEDCOM AKA token. */

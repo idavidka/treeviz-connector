@@ -97,6 +97,44 @@
     dezembro: 12
   };
   var collapse = (value) => (value ?? "").replace(/\s+/g, " ").trim();
+  var foldName = (value) => collapse(value).normalize("NFD").replace(/\p{Diacritic}/gu, "").toLocaleLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  var FACT_TITLE_ALIASES = {
+    aka: "also known as",
+    "also known": "also known as",
+    "e mail": "email"
+  };
+  var factTitleKey = (title) => {
+    const key = foldName(title);
+    return FACT_TITLE_ALIASES[key] || key;
+  };
+  var sameName = (left, right) => {
+    const a = foldName(left);
+    const b = foldName(right);
+    if (!a || !b) {
+      return false;
+    }
+    if (a === b) {
+      return true;
+    }
+    return a.split(" ").sort().join(" ") === b.split(" ").sort().join(" ");
+  };
+  var diffNameList = (key, siteNames, treeNames) => {
+    const unmatchedSite = siteNames.filter(
+      (siteName) => !treeNames.some((treeName) => sameName(siteName, treeName))
+    );
+    const unmatchedTree = treeNames.filter(
+      (treeName) => !siteNames.some((siteName) => sameName(siteName, treeName))
+    );
+    if (!unmatchedSite.length && !unmatchedTree.length) {
+      return void 0;
+    }
+    return {
+      key,
+      site: siteNames.join(", ") || void 0,
+      treeviz: treeNames.join(", ") || void 0,
+      writable: false
+    };
+  };
   var sameText = (left, right) => collapse(left).toLocaleLowerCase() === collapse(right).toLocaleLowerCase();
   var parseLooseDate = (value) => {
     const text = collapse(value);
@@ -886,6 +924,275 @@
     const field = form ? valueOf("individualID", form) : "";
     return field.replace(/[^\d]/g, "") || urlPersonId();
   };
+  var fieldByTitle = /* @__PURE__ */ new Map();
+  var editorStep = () => {
+    try {
+      return new URL(window.location.href).searchParams.get("step") || "essentials";
+    } catch {
+      return "essentials";
+    }
+  };
+  var namedControl = (form, name) => {
+    const node = form.querySelector(`[name="${CSS.escape(name)}"]`);
+    if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement || node instanceof HTMLSelectElement) {
+      return node;
+    }
+    return null;
+  };
+  var controlValue = (form, name) => namedControl(form, name)?.value.trim() || "";
+  var joinParts = (parts) => parts.map((part) => part?.trim() || "").filter(Boolean).join(", ");
+  var pushFact = (facts, title, value, field) => {
+    if (field) {
+      fieldByTitle.set(factTitleKey(title), field);
+    }
+    const clean = value.trim();
+    if (!title || !clean || clean === "Y") {
+      return;
+    }
+    facts.push({ title, value: clean });
+  };
+  var eachPresent = (form, base, visit) => {
+    for (let index = 0; index < 30; index += 1) {
+      if (!namedControl(form, `${base}${index}`)) {
+        break;
+      }
+      visit(String(index));
+    }
+  };
+  var FACT_TYPE_TITLE = {
+    BIRT: "Birth",
+    DEAT: "Death",
+    MARR: "Marriage",
+    OCCU: "Occupation",
+    EDUC: "Education",
+    RELI: "Religion",
+    BURI: "Burial",
+    CHR: "Christening",
+    BAPM: "Baptism",
+    RESI: "Residence",
+    NATI: "Nationality",
+    TITL: "Title",
+    ADDR: "Address"
+  };
+  var FAVORITE_FIELDS = [
+    ["favoriteInterestsHeader", "Interests"],
+    ["favoriteActivitiesHeader", "Activities"],
+    ["favoriteMusicHeader", "Music"],
+    ["favoriteMoviesHeader", "Movies"],
+    ["favoriteTVShowsHeader", "TV shows"],
+    ["favoriteBooksHeader", "Books"],
+    ["favoriteSportsHeader", "Sports"],
+    ["favoriteRestaurantsHeader", "Restaurants"],
+    ["favoriteFoodHeader", "Food"],
+    ["favoritePeopleHeader", "People"],
+    ["favoriteGetawaysHeader", "Getaways"],
+    ["favoriteQuotesHeader", "Quotes"]
+  ];
+  var roleOf = (label2) => {
+    const key = label2.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLocaleLowerCase().trim();
+    if (/^(father|mother|parent|apa|anya|apja|anyja)$/.test(key)) {
+      return "parents";
+    }
+    if (/^(husband|wife|spouse|ferj|ferje|feleseg|felesege|hazastars|hazastarsa)$/.test(key)) {
+      return "spouses";
+    }
+    if (/^(son|daughter|child|fia|lanya|gyermek|gyermeke)$/.test(key)) {
+      return "children";
+    }
+    return void 0;
+  };
+  var readEditorSections = (form) => {
+    fieldByTitle.clear();
+    const facts = [];
+    const relatives = { parents: [], spouses: [], children: [] };
+    const single = [
+      ["nickname", "Nickname"],
+      ["formerName", "Former name"],
+      ["marriedName", "Married name"],
+      ["prefix", "Prefix"],
+      ["suffix", "Suffix"],
+      ["religiousName", "Religious name"],
+      ["godparents", "Godparents"],
+      ["causeOfDeath", "Cause of Death"],
+      ["religion", "Religion"],
+      ["nationalitiesHeader", "Nationality"],
+      ["languages", "Language"],
+      ["politicsHeader", "Political"],
+      ["height", "Height"],
+      ["weight", "Weight"],
+      ["hairColor", "Hair color"],
+      ["eyeColor", "Eye color"],
+      ["physical", "Physical description"],
+      ["biography", "Biography"],
+      ["biographyText", "Biography"]
+    ];
+    for (const [name, title] of single) {
+      if (namedControl(form, name)) {
+        pushFact(facts, title, controlValue(form, name), name);
+      }
+    }
+    pushFact(
+      facts,
+      "Christening",
+      joinParts([composedDate("christeningDate", form), controlValue(form, "christeningPlace")]),
+      namedControl(form, "christeningPlace") ? "christeningPlace" : void 0
+    );
+    pushFact(
+      facts,
+      "Burial",
+      joinParts([composedDate("burialDate", form), controlValue(form, "burialPlace")]),
+      namedControl(form, "burialPlace") ? "burialPlace" : void 0
+    );
+    eachPresent(form, "addressAddressOne", (index) => {
+      pushFact(
+        facts,
+        "Address",
+        joinParts([
+          controlValue(form, `addressAddressOne${index}`),
+          controlValue(form, `addressAddressTwo${index}`),
+          controlValue(form, `addressCity${index}`),
+          controlValue(form, `addressZip${index}`),
+          controlValue(form, `addressCountry${index}`),
+          composedDate(`addressDate${index}`, form)
+        ]),
+        `addressAddressOne${index}`
+      );
+    });
+    eachPresent(form, "contactEmail", (index) => {
+      pushFact(facts, "Email", controlValue(form, `contactEmail${index}`), `contactEmail${index}`);
+    });
+    eachPresent(form, "contactPhone", (index) => {
+      pushFact(facts, "Phone", controlValue(form, `contactPhone${index}`), `contactPhone${index}`);
+    });
+    eachPresent(form, "contactFax", (index) => {
+      pushFact(facts, "Fax", controlValue(form, `contactFax${index}`), `contactFax${index}`);
+    });
+    eachPresent(form, "contactWebAddress", (index) => {
+      pushFact(
+        facts,
+        "Web Address",
+        joinParts([
+          controlValue(form, `contactWebUsername${index}`),
+          controlValue(form, `contactWebAddress${index}`)
+        ]),
+        `contactWebAddress${index}`
+      );
+    });
+    eachPresent(form, "workHeader", (index) => {
+      pushFact(
+        facts,
+        "Occupation",
+        joinParts([
+          controlValue(form, `workHeader${index}`),
+          controlValue(form, `workPlace${index}`),
+          controlValue(form, `workNote${index}`),
+          composedDate(`workDate${index}`, form)
+        ]),
+        `workHeader${index}`
+      );
+    });
+    eachPresent(form, "educationHeader", (index) => {
+      pushFact(
+        facts,
+        "Education",
+        joinParts([
+          controlValue(form, `educationHeader${index}`),
+          controlValue(form, `educationPlace${index}`),
+          controlValue(form, `educationNote${index}`),
+          composedDate(`educationDate${index}`, form)
+        ]),
+        `educationHeader${index}`
+      );
+    });
+    for (const [name, title] of FAVORITE_FIELDS) {
+      pushFact(facts, title, controlValue(form, name), name);
+    }
+    eachPresent(form, "citationSource", (index) => {
+      pushFact(
+        facts,
+        "Citation",
+        joinParts([
+          controlValue(form, `citationSource${index}`),
+          controlValue(form, `citationDescription${index}`),
+          controlValue(form, `citationPage${index}`),
+          composedDate(`citationDate${index}`, form)
+        ]),
+        `citationDescription${index}`
+      );
+    });
+    eachPresent(form, "factType", (index) => {
+      const type = controlValue(form, `factType${index}`);
+      const title = FACT_TYPE_TITLE[type] || controlValue(form, `factHeader${index}`) || type;
+      if (type === "DEAT" && namedControl(form, `causeOfDeath${index}`)) {
+        pushFact(
+          facts,
+          "Cause of Death",
+          controlValue(form, `causeOfDeath${index}`),
+          `causeOfDeath${index}`
+        );
+      }
+      if (title === "Birth" || title === "Death" || title === "Marriage") {
+        return;
+      }
+      if (namedControl(form, `factHeader${index}`) || namedControl(form, `factPlace${index}`)) {
+        pushFact(
+          facts,
+          title,
+          joinParts([
+            controlValue(form, `factHeader${index}`),
+            controlValue(form, `factPlace${index}`),
+            controlValue(form, `causeOfDeath${index}`),
+            composedDate(`factDate${index}`, form)
+          ]),
+          namedControl(form, `factHeader${index}`) ? `factHeader${index}` : `factPlace${index}`
+        );
+      }
+    });
+    if (editorStep() === "biography") {
+      const area = form.querySelector("textarea");
+      if (area instanceof HTMLTextAreaElement && area.name) {
+        pushFact(facts, "Biography", area.value, area.name);
+      }
+    }
+    if (editorStep() === "family") {
+      for (const label2 of Array.from(form.querySelectorAll(".FL_Label"))) {
+        const role = label2.nextElementSibling;
+        const kind = role ? roleOf(role.textContent || "") : void 0;
+        const name = label2.textContent?.trim() || "";
+        if (kind && name) {
+          relatives[kind].push(name);
+        }
+      }
+    }
+    return { facts, relatives };
+  };
+  var factListDiffs = (siteFacts, treeFacts) => {
+    const titles = /* @__PURE__ */ new Map();
+    for (const fact of [...siteFacts, ...treeFacts]) {
+      const key = factTitleKey(fact.title);
+      if (key && !titles.has(key)) {
+        titles.set(key, fact.title);
+      }
+    }
+    const diffs = [];
+    for (const [key, title] of titles) {
+      const siteValues = siteFacts.filter((fact) => factTitleKey(fact.title) === key).map((fact) => fact.value);
+      const treeValues = treeFacts.filter((fact) => factTitleKey(fact.title) === key).map((fact) => fact.value);
+      for (const value of siteValues) {
+        if (treeValues.some((treeValue) => sameName(treeValue, value))) {
+          continue;
+        }
+        diffs.push({ key: "fact", label: title, site: value, writable: false });
+      }
+      for (const value of treeValues) {
+        if (siteValues.some((siteValue) => sameName(siteValue, value))) {
+          continue;
+        }
+        diffs.push({ key: "fact", label: title, treeviz: value, writable: true });
+      }
+    }
+    return diffs;
+  };
   var writable = (_key) => true;
   var dateFields = (prefix, raw) => {
     const parsed = parseLooseDate(raw);
@@ -903,8 +1210,23 @@
     }
     return fields;
   };
+  var factRow = (type) => {
+    const form = activeForm() ?? document;
+    for (let index = 0; index < 30; index += 1) {
+      if (!namedControl(form, `factType${index}`)) {
+        return void 0;
+      }
+      if (controlValue(form, `factType${index}`) === type) {
+        return String(index);
+      }
+    }
+    return void 0;
+  };
   var fieldsFor = (person, keys) => {
     const fields = [];
+    const form = activeForm() ?? document;
+    const birthRow = factRow("BIRT");
+    const deathRow = factRow("DEAT");
     if (keys.includes("name")) {
       if (person.givenName) {
         fields.push({ id: "firstName", value: person.givenName });
@@ -918,16 +1240,22 @@
       fields.push({ id, check: true });
     }
     if (keys.includes("birthDate")) {
-      fields.push(...dateFields("birthDate", person.birthDate));
+      fields.push(
+        ...dateFields(birthRow && !namedControl(form, "gdp_firstDateYear_birthDate") ? `factDate${birthRow}` : "birthDate", person.birthDate)
+      );
     }
     if (keys.includes("birthPlace") && person.birthPlace) {
-      fields.push({ id: "birthPlace", value: person.birthPlace });
+      const id = birthRow && !namedControl(form, "birthPlace") ? `factPlace${birthRow}` : "birthPlace";
+      fields.push({ id, value: person.birthPlace });
     }
     if (keys.includes("deathDate")) {
-      fields.push(...dateFields("deathDate", person.deathDate));
+      fields.push(
+        ...dateFields(deathRow && !namedControl(form, "gdp_firstDateYear_deathDate") ? `factDate${deathRow}` : "deathDate", person.deathDate)
+      );
     }
     if (keys.includes("deathPlace") && person.deathPlace) {
-      fields.push({ id: "deathPlace", value: person.deathPlace });
+      const id = deathRow && !namedControl(form, "deathPlace") ? `factPlace${deathRow}` : "deathPlace";
+      fields.push({ id, value: person.deathPlace });
     }
     if (keys.includes("marriageDate")) {
       fields.push(...dateFields("marriageDate0", person.marriageDate));
@@ -990,10 +1318,62 @@
       return;
     }
     const form = readForm();
+    const formRoot = activeForm();
     const sameForm = Boolean(
       form && (formPersonId() === personId || onEditorPage() && urlPersonId() === personId)
     );
-    const diffs = form && sameForm ? diffPerson(form, person, writable) : [];
+    const sections = formRoot && sameForm ? readEditorSections(formRoot) : void 0;
+    const keep = /* @__PURE__ */ new Set();
+    if (formRoot && namedControl(formRoot, "firstName")) {
+      ["name", "sex", "birthDate", "birthPlace", "deathDate", "deathPlace"].forEach(
+        (key) => keep.add(key)
+      );
+    }
+    if (formRoot && (namedControl(formRoot, "marriagePlace0") || namedControl(formRoot, "gdp_firstDateYear_marriageDate0"))) {
+      keep.add("marriageDate");
+      keep.add("marriagePlace");
+    }
+    if (formRoot) {
+      for (let index = 0; index < 30; index += 1) {
+        if (!namedControl(formRoot, `factType${index}`)) {
+          break;
+        }
+        const type = controlValue(formRoot, `factType${index}`);
+        if (type === "DEAT" && form) {
+          form.deathDate = composedDate(`factDate${index}`, formRoot) || form.deathDate;
+          form.deathPlace = controlValue(formRoot, `factPlace${index}`) || form.deathPlace;
+          keep.add("deathDate");
+          keep.add("deathPlace");
+        }
+        if (type === "BIRT" && form) {
+          form.birthDate = composedDate(`factDate${index}`, formRoot) || form.birthDate;
+          form.birthPlace = controlValue(formRoot, `factPlace${index}`) || form.birthPlace;
+          keep.add("birthDate");
+          keep.add("birthPlace");
+        }
+      }
+    }
+    const diffs = form && sameForm ? diffPerson(form, person, writable).filter((diff) => keep.has(diff.key)) : [];
+    if (sections) {
+      const relevant = (person.facts ?? []).filter(
+        (fact) => fieldByTitle.has(factTitleKey(fact.title))
+      );
+      diffs.push(...factListDiffs(sections.facts, relevant));
+    }
+    if (sections && editorStep() === "family") {
+      const namesOf = (ids) => (ids ?? []).map((id) => personIn(tree, id)?.name || "").filter(Boolean);
+      const groups = [
+        ["parents", person.parentIds],
+        ["spouses", person.spouseIds],
+        ["children", person.childIds]
+      ];
+      for (const [key, ids] of groups) {
+        const diff = diffNameList(key, sections.relatives[key], namesOf(ids));
+        if (diff) {
+          diffs.push(diff);
+        }
+      }
+    }
     void ask({
       type: "connector:save-site",
       snapshot: {
@@ -1027,7 +1407,11 @@
       layoutKnown: sameForm ? true : void 0,
       status: sameForm ? void 0 : t("openEdit"),
       onUpdateSite: sameForm ? (diff) => {
-        void writeSelected(person, [diff.key]);
+        if (diff.key === "parents" || diff.key === "spouses" || diff.key === "children") {
+          patchPanel({ status: t("relativesNotWritten") });
+          return;
+        }
+        void writeSelected(person, diff);
       } : void 0,
       onUpdateTree: (diff) => {
         patchPanel({ busy: true });
@@ -1065,12 +1449,20 @@
       host?.shadowRoot?.querySelector(".card")?.append(button);
     }
   };
-  var writeSelected = async (person, keys) => {
+  var writeSelected = async (person, diff) => {
     if (!navigator.onLine) {
       patchPanel({ status: t("offline") });
       return;
     }
-    const fields = fieldsFor(person, keys);
+    let fields = fieldsFor(person, [diff.key]);
+    if (diff.key === "fact" && diff.label && diff.treeviz) {
+      const id = fieldByTitle.get(factTitleKey(diff.label));
+      fields = id ? [{ id, value: diff.treeviz }] : [];
+    }
+    if (!fields.length) {
+      patchPanel({ status: t("factNotWritten") });
+      return;
+    }
     document.documentElement.setAttribute(
       "data-treeviz-connector-write",
       JSON.stringify(fields)
