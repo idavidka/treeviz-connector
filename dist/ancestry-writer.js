@@ -38,7 +38,11 @@ export const readAncestryCards = (doc) => {
             title: root.querySelector(".userCardTitle")?.textContent?.trim() || "",
             date: root.querySelector(".factItemDate")?.textContent?.trim() || "",
             place: root.querySelector(".factItemLocation")?.textContent?.trim() || "",
-            subtitle: root.querySelector(".userCardSubTitle")?.textContent?.trim() || "",
+            subtitle: root.querySelector(".userCardSubTitle")?.textContent?.trim() ||
+                Array.from(root.querySelectorAll(".textWrap"))
+                    .map((item) => item.textContent?.trim() || "")
+                    .filter(Boolean)
+                    .join(", "),
         };
     });
 };

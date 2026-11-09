@@ -98,6 +98,14 @@
   };
   var collapse = (value) => (value ?? "").replace(/\s+/g, " ").trim();
   var foldName = (value) => collapse(value).normalize("NFD").replace(/\p{Diacritic}/gu, "").toLocaleLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  var FACT_TITLE_ALIASES = {
+    aka: "also known as",
+    "also known": "also known as"
+  };
+  var factTitleKey = (title) => {
+    const key = foldName(title);
+    return FACT_TITLE_ALIASES[key] || key;
+  };
   var sameName = (left, right) => {
     const a = foldName(left);
     const b = foldName(right);
@@ -359,7 +367,7 @@
           title: root.querySelector(".userCardTitle")?.textContent?.trim() || "",
           date: root.querySelector(".factItemDate")?.textContent?.trim() || "",
           place: root.querySelector(".factItemLocation")?.textContent?.trim() || "",
-          subtitle: root.querySelector(".userCardSubTitle")?.textContent?.trim() || ""
+          subtitle: root.querySelector(".userCardSubTitle")?.textContent?.trim() || Array.from(root.querySelectorAll(".textWrap")).map((item) => item.textContent?.trim() || "").filter(Boolean).join(", ")
         };
       }
     );
@@ -699,7 +707,9 @@
     "gallery",
     "hints",
     "media",
-    "story"
+    "story",
+    "nothing to see yet",
+    "stay tuned"
   ]);
   var LIFE_HEADER = /^(birth|szuletes|death|halal|marriage|hazassag|baptism|burial|christening|gender|sex|name|nev|nem)\b/;
   var chromeLine = (line) => {
@@ -1519,19 +1529,43 @@
       householdFound: Boolean(householdHeading)
     };
   };
-  var readPageFacts = () => readLooseFacts(document, relationshipsRoot());
+  var LIFE_FACT = /^(birth|szuletes|death|halal|marriage|hazassag|baptism|burial|christening|gender|sex|name|nev|nem)\b/;
+  var readPageFacts = () => {
+    const facts = [];
+    const seen = /* @__PURE__ */ new Set();
+    const push = (title, value) => {
+      const cleanTitle = title.trim();
+      const cleanValue = value.trim();
+      if (!cleanTitle || !cleanValue || LIFE_FACT.test(foldName(cleanTitle))) {
+        return;
+      }
+      const id = `${factTitleKey(cleanTitle)}|${foldName(cleanValue)}`;
+      if (seen.has(id)) {
+        return;
+      }
+      seen.add(id);
+      facts.push({ title: cleanTitle, value: cleanValue });
+    };
+    for (const card of readAncestryCards(document)) {
+      push(card.title, [card.subtitle, card.date, card.place].filter(Boolean).join(", "));
+    }
+    for (const fact of readLooseFacts(document, relationshipsRoot())) {
+      push(fact.title, fact.value);
+    }
+    return facts;
+  };
   var factDiffs = (siteFacts2, treeFacts) => {
     const titles = /* @__PURE__ */ new Map();
     for (const fact of [...siteFacts2, ...treeFacts]) {
-      const key = foldName(fact.title);
+      const key = factTitleKey(fact.title);
       if (key && !titles.has(key)) {
         titles.set(key, fact.title);
       }
     }
     const diffs = [];
     for (const [key, title] of titles) {
-      const siteValues = siteFacts2.filter((fact) => foldName(fact.title) === key).map((fact) => fact.value);
-      const treeValues = treeFacts.filter((fact) => foldName(fact.title) === key).map((fact) => fact.value);
+      const siteValues = siteFacts2.filter((fact) => factTitleKey(fact.title) === key).map((fact) => fact.value);
+      const treeValues = treeFacts.filter((fact) => factTitleKey(fact.title) === key).map((fact) => fact.value);
       for (const value of siteValues) {
         if (treeValues.some((treeValue2) => sameName(treeValue2, value))) {
           continue;

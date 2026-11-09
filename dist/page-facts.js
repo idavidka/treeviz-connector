@@ -27,6 +27,8 @@ const SKIP_TITLES = new Set([
     "hints",
     "media",
     "story",
+    "nothing to see yet",
+    "stay tuned",
 ]);
 /** Life-event headers already compared on their own rows, e.g. "BIRTH ABT. 1785". */
 const LIFE_HEADER = /^(birth|szuletes|death|halal|marriage|hazassag|baptism|burial|christening|gender|sex|name|nev|nem)\b/;

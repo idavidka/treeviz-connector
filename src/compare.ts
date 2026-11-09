@@ -109,6 +109,17 @@ export const foldName = (value?: string): string =>
 		.replace(/[^a-z0-9]+/g, " ")
 		.trim();
 
+const FACT_TITLE_ALIASES: Record<string, string> = {
+	aka: "also known as",
+	"also known": "also known as",
+};
+
+/** Same fact under Ancestry's label and the GEDCOM AKA token. */
+export const factTitleKey = (title?: string): string => {
+	const key = foldName(title);
+	return FACT_TITLE_ALIASES[key] || key;
+};
+
 export const sameName = (left?: string, right?: string): boolean => {
 	const a = foldName(left);
 	const b = foldName(right);

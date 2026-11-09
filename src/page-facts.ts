@@ -29,6 +29,8 @@ const SKIP_TITLES = new Set([
 	"hints",
 	"media",
 	"story",
+	"nothing to see yet",
+	"stay tuned",
 ]);
 
 /** Life-event headers already compared on their own rows, e.g. "BIRTH ABT. 1785". */

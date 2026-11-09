@@ -5,7 +5,7 @@ import {
 	writeAncestryFacts,
 } from "../ancestry-writer.js";
 import type { SiteFacts } from "../compare.js";
-import { diffPerson, foldName, sameName } from "../compare.js";
+import { diffPerson, factTitleKey, foldName, sameName } from "../compare.js";
 import { t } from "../i18n.js";
 import { connectorLog } from "../log.js";
 import { loadIndex, matchTrees, personIn, preferActive, ask } from "../match.js";
@@ -539,12 +539,38 @@ const readRelatives = (): {
 	};
 };
 
-const readPageFacts = (): ConnectorFact[] => readLooseFacts(document, relationshipsRoot());
+const LIFE_FACT =
+	/^(birth|szuletes|death|halal|marriage|hazassag|baptism|burial|christening|gender|sex|name|nev|nem)\b/;
+
+const readPageFacts = (): ConnectorFact[] => {
+	const facts: ConnectorFact[] = [];
+	const seen = new Set<string>();
+	const push = (title: string, value: string) => {
+		const cleanTitle = title.trim();
+		const cleanValue = value.trim();
+		if (!cleanTitle || !cleanValue || LIFE_FACT.test(foldName(cleanTitle))) {
+			return;
+		}
+		const id = `${factTitleKey(cleanTitle)}|${foldName(cleanValue)}`;
+		if (seen.has(id)) {
+			return;
+		}
+		seen.add(id);
+		facts.push({ title: cleanTitle, value: cleanValue });
+	};
+	for (const card of readAncestryCards(document)) {
+		push(card.title, [card.subtitle, card.date, card.place].filter(Boolean).join(", "));
+	}
+	for (const fact of readLooseFacts(document, relationshipsRoot())) {
+		push(fact.title, fact.value);
+	}
+	return facts;
+};
 
 const factDiffs = (siteFacts: ConnectorFact[], treeFacts: ConnectorFact[]): FieldDiff[] => {
 	const titles = new Map<string, string>();
 	for (const fact of [...siteFacts, ...treeFacts]) {
-		const key = foldName(fact.title);
+		const key = factTitleKey(fact.title);
 		if (key && !titles.has(key)) {
 			titles.set(key, fact.title);
 		}
@@ -552,10 +578,10 @@ const factDiffs = (siteFacts: ConnectorFact[], treeFacts: ConnectorFact[]): Fiel
 	const diffs: FieldDiff[] = [];
 	for (const [key, title] of titles) {
 		const siteValues = siteFacts
-			.filter((fact) => foldName(fact.title) === key)
+			.filter((fact) => factTitleKey(fact.title) === key)
 			.map((fact) => fact.value);
 		const treeValues = treeFacts
-			.filter((fact) => foldName(fact.title) === key)
+			.filter((fact) => factTitleKey(fact.title) === key)
 			.map((fact) => fact.value);
 		for (const value of siteValues) {
 			if (treeValues.some((treeValue) => sameName(treeValue, value))) {
