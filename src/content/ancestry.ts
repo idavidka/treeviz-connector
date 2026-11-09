@@ -18,6 +18,41 @@ const cardText = (
 	aliases: string[]
 ) => cards.find((card) => aliases.includes(card.title.toLocaleLowerCase()));
 
+const valueUnderLabel = (labels: string[]): string | undefined => {
+	let best: { length: number; value: string } | undefined;
+	document.querySelectorAll("div, section, li, article").forEach((node) => {
+		const text = (node as HTMLElement).innerText?.trim();
+		if (!text || text.length > 90 || !text.includes("\n")) {
+			return;
+		}
+		const lines = text
+			.split("\n")
+			.map((line) => line.trim())
+			.filter(Boolean);
+		if (lines.length < 2 || !labels.includes(lines[0].toLocaleLowerCase())) {
+			return;
+		}
+		if (!best || text.length < best.length) {
+			best = { length: text.length, value: lines.slice(1).join(", ") };
+		}
+	});
+	return best?.value;
+};
+
+const splitFactLine = (value?: string): { date?: string; place?: string } => {
+	if (!value) {
+		return {};
+	}
+	if (/\d{3,4}/.test(value) && value.includes(",")) {
+		const [date, ...rest] = value.split(",");
+		return { date: date.trim(), place: rest.join(",").trim() };
+	}
+	if (/\d{3,4}/.test(value) || /unknown|ismeretlen/i.test(value)) {
+		return { date: value };
+	}
+	return { place: value };
+};
+
 const siteFacts = (): SiteFacts => {
 	const layoutKnown = ancestryLayoutKnown(document);
 	const cards = readAncestryCards(document);
@@ -26,26 +61,36 @@ const siteFacts = (): SiteFacts => {
 	const birth = cardText(cards, ["birth", "születés", "szuletes", "geburt", "naissance", "nacimiento"]);
 	const death = cardText(cards, ["death", "halál", "halal", "tod", "décès", "deces", "defunción"]);
 	const marriage = cardText(cards, ["marriage", "házasság", "hazassag", "heirat", "mariage", "matrimonio"]);
+	const looseBirth = splitFactLine(
+		valueUnderLabel(["birth", "születés", "szuletes", "geburt", "naissance", "nacimiento"])
+	);
+	const looseDeath = splitFactLine(
+		valueUnderLabel(["death", "halál", "halal", "tod", "décès", "deces", "defunción"])
+	);
+	const looseMarriage = splitFactLine(
+		valueUnderLabel(["marriage", "házasság", "hazassag", "heirat", "mariage", "matrimonio"])
+	);
 	return {
 		layoutKnown,
-		name: name?.subtitle,
-		sex: sex?.subtitle,
-		birthDate: birth?.date,
-		birthPlace: birth?.place,
-		deathDate: death?.date,
-		deathPlace: death?.place,
-		marriageDate: marriage?.date,
-		marriagePlace: marriage?.place,
+		name: name?.subtitle || valueUnderLabel(["name", "név", "nev", "nom", "nombre"]),
+		sex: sex?.subtitle || valueUnderLabel(["gender", "sex", "nem", "geschlecht", "sexe", "sexo"]),
+		birthDate: birth?.date || looseBirth.date,
+		birthPlace: birth?.place || looseBirth.place,
+		deathDate: death?.date || looseDeath.date,
+		deathPlace: death?.place || looseDeath.place,
+		marriageDate: marriage?.date || looseMarriage.date,
+		marriagePlace: marriage?.place || looseMarriage.place,
 	};
 };
 
 const writableOnAncestry = (key: FieldKey): boolean =>
-	key === "birthDate" ||
-	key === "birthPlace" ||
-	key === "deathDate" ||
-	key === "deathPlace" ||
-	key === "marriageDate" ||
-	key === "marriagePlace";
+	ancestryLayoutKnown(document) &&
+	(key === "birthDate" ||
+		key === "birthPlace" ||
+		key === "deathDate" ||
+		key === "deathPlace" ||
+		key === "marriageDate" ||
+		key === "marriagePlace");
 
 const factType = (key: FieldKey): string => {
 	if (key.startsWith("birth")) return "Birth";

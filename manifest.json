@@ -25,14 +25,32 @@
 	"permissions": ["storage", "scripting", "tabs"],
 	"host_permissions": [
 		"https://www.ancestry.com/*",
+		"https://ancestry.com/*",
+		"https://*.ancestry.com/*",
 		"https://www.ancestry.co.uk/*",
+		"https://ancestry.co.uk/*",
+		"https://*.ancestry.co.uk/*",
 		"https://www.ancestry.ca/*",
+		"https://ancestry.ca/*",
+		"https://*.ancestry.ca/*",
 		"https://www.ancestry.com.au/*",
+		"https://ancestry.com.au/*",
+		"https://*.ancestry.com.au/*",
 		"https://www.ancestry.de/*",
+		"https://ancestry.de/*",
+		"https://*.ancestry.de/*",
 		"https://www.ancestry.fr/*",
+		"https://ancestry.fr/*",
+		"https://*.ancestry.fr/*",
 		"https://www.ancestry.it/*",
+		"https://ancestry.it/*",
+		"https://*.ancestry.it/*",
 		"https://www.ancestry.se/*",
+		"https://ancestry.se/*",
+		"https://*.ancestry.se/*",
 		"https://www.ancestry.mx/*",
+		"https://ancestry.mx/*",
+		"https://*.ancestry.mx/*",
 		"https://www.myheritage.com/*",
 		"https://www.myheritage.hu/*",
 		"https://www.myheritage.de/*",
@@ -68,17 +86,34 @@
 		{
 			"matches": [
 				"https://www.ancestry.com/*",
+				"https://ancestry.com/*",
+				"https://*.ancestry.com/*",
 				"https://www.ancestry.co.uk/*",
+				"https://ancestry.co.uk/*",
+				"https://*.ancestry.co.uk/*",
 				"https://www.ancestry.ca/*",
+				"https://ancestry.ca/*",
+				"https://*.ancestry.ca/*",
 				"https://www.ancestry.com.au/*",
+				"https://ancestry.com.au/*",
+				"https://*.ancestry.com.au/*",
 				"https://www.ancestry.de/*",
+				"https://ancestry.de/*",
+				"https://*.ancestry.de/*",
 				"https://www.ancestry.fr/*",
+				"https://ancestry.fr/*",
+				"https://*.ancestry.fr/*",
 				"https://www.ancestry.it/*",
+				"https://ancestry.it/*",
+				"https://*.ancestry.it/*",
 				"https://www.ancestry.se/*",
-				"https://www.ancestry.mx/*"
+				"https://ancestry.se/*",
+				"https://*.ancestry.se/*",
+				"https://www.ancestry.mx/*",
+				"https://ancestry.mx/*",
+				"https://*.ancestry.mx/*"
 			],
 			"js": ["dist/content/ancestry.js"],
-			"type": "module",
 			"run_at": "document_idle"
 		},
 		{
@@ -98,7 +133,6 @@
 				"https://www.myheritage.pt/*"
 			],
 			"js": ["dist/content/myheritage.js"],
-			"type": "module",
 			"run_at": "document_idle"
 		},
 		{
@@ -110,7 +144,6 @@
 				"http://localhost/*"
 			],
 			"js": ["dist/content/treeviz.js"],
-			"type": "module",
 			"run_at": "document_idle"
 		}
 	]
