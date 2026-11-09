@@ -1,6 +1,6 @@
 import { diffNameList, diffPerson, factTitleKey, parseLooseDate, sameName } from "../compare.js";
 import type { SiteFacts } from "../compare.js";
-import { t } from "../i18n.js";
+import { languageReady, onLanguage, t } from "../i18n.js";
 import { connectorLog } from "../log.js";
 import { ask, loadIndex, matchTrees, personIn, preferActive } from "../match.js";
 import { parseMyHeritageLocation } from "../parse-url.js";
@@ -803,5 +803,11 @@ const tick = (): void => {
 	void renderMatch();
 };
 
-tick();
-window.setInterval(tick, 1000);
+void languageReady.then(() => {
+	tick();
+	window.setInterval(tick, 1000);
+	onLanguage(() => {
+		href = "";
+		tick();
+	});
+});

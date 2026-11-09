@@ -55,6 +55,14 @@ interface ChromeNamespace {
 	storage: {
 		local: ChromeStorageArea;
 		session: ChromeStorageArea;
+		onChanged: {
+			addListener: (
+				listener: (
+					changes: Record<string, { newValue?: unknown }>,
+					area: string
+				) => void
+			) => void;
+		};
 	};
 	tabs: {
 		create: (props: { url: string; active?: boolean }) => Promise<ChromeTab>;

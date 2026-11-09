@@ -384,9 +384,416 @@
     copyLog: "Copy log",
     copiedLog: "Log copied."
   };
+  var DE = {
+    title: "TreeViz Connector",
+    signIn: "Melde dich bei TreeViz an und \xF6ffne den Baum in diesem Browser.",
+    cached: "Die TreeViz-Daten sind seit {{time}} in diesem Browser.",
+    notInTree: "Diese Person ist nicht im ge\xF6ffneten TreeViz-Baum.",
+    inTree: "Diese Person ist im TreeViz-Baum: {{tree}}.",
+    pickTree: "Mehr als ein TreeViz-Baum enth\xE4lt diese Person. W\xE4hl einen aus.",
+    site: "Auf dieser Seite",
+    onAncestry: "Auf Ancestry",
+    onMyHeritage: "Auf MyHeritage",
+    treeviz: "TreeViz",
+    update: "Ausgew\xE4hlte Felder schreiben",
+    updateSource: "{{source}} aktualisieren",
+    updateTree: "In TreeViz aktualisieren",
+    updatedTree: "In TreeViz geschrieben.",
+    addedRelatives: "Zu TreeViz hinzugef\xFCgt: {{names}}",
+    nothingToAdd: "TreeViz hat schon jeden Namen von dieser Seite.",
+    treeClosed: "\xD6ffne diesen Baum in TreeViz, und versuch es noch einmal.",
+    ambiguous: "Mehr als eine Person im Baum hat diesen Namen: {{names}}",
+    relativesNotWritten: "Verwandte werden in diesem Layout nicht auf die Quellseite geschrieben.",
+    warning: "Die \xC4nderung bleibt auf dieser Seite. TreeViz kann sie nicht r\xFCckg\xE4ngig machen. Nur die markierten Felder werden geschrieben.",
+    layout: "TreeViz Connector kennt dieses Seitenlayout nicht und schreibt deshalb nicht.",
+    noDiff: "TreeViz und diese Seite stimmen \xFCberein.",
+    openSource: "Zur Pr\xFCfung \xF6ffnen",
+    compare: "Pr\xFCf diese Person auf der Quellseite.",
+    wrote: "Geschrieben.",
+    failed: "Schreiben ist nicht gelungen.",
+    openEdit: "Editor zum Vergleichen \xF6ffnen",
+    whichPerson: "\xD6ffne das Profil der Person oder den Editor.",
+    offline: "Zum Schreiben brauchst du eine Netzwerkverbindung.",
+    name: "Name",
+    sex: "Geschlecht",
+    female: "weiblich",
+    male: "m\xE4nnlich",
+    birthDate: "Geburtsdatum",
+    birthPlace: "Geburtsort",
+    deathDate: "Sterbedatum",
+    deathPlace: "Sterbeort",
+    marriageDate: "Heiratsdatum",
+    marriagePlace: "Heiratsort",
+    parents: "Eltern",
+    spouses: "Ehepartner",
+    children: "Kinder",
+    fact: "Ereignis",
+    factsStale: "In diesen TreeViz-Daten sind noch keine weiteren Ereignisse. Lade den TreeViz-Tab neu, damit er den Baum noch einmal schickt.",
+    factNotWritten: "Dieses Ereignis wird in diesem Layout nicht auf die Quellseite geschrieben.",
+    relativesStale: "In diesen TreeViz-Daten sind noch keine Verwandten. Lade den TreeViz-Tab neu, damit er den Baum noch einmal schickt.",
+    missingFact: "Das Ereignis ist auf dieser Seite nicht zu finden.",
+    batchDone: "Die Ancestry-Aktualisierung ist fertig.",
+    openApp: "TreeViz \xF6ffnen",
+    hide: "Ausblenden",
+    showPanel: "Panel anzeigen",
+    panelShown: "Das Panel ist auf dieser Seite wieder sichtbar.",
+    panelMissing: "Auf dieser Seite gibt es kein TreeViz-Connector-Panel.",
+    persons: "{{count}} Personen",
+    log: "Protokoll",
+    copyLog: "Protokoll kopieren",
+    copiedLog: "Protokoll ist in der Zwischenablage."
+  };
+  var FR = {
+    title: "TreeViz Connector",
+    signIn: "Connecte-toi \xE0 TreeViz et ouvre l'arbre dans ce navigateur.",
+    cached: "Les donn\xE9es TreeViz sont dans ce navigateur depuis {{time}}.",
+    notInTree: "Cette personne n'est pas dans l'arbre TreeViz ouvert.",
+    inTree: "Cette personne est dans l'arbre TreeViz : {{tree}}.",
+    pickTree: "Plus d'un arbre TreeViz contient cette personne. Choisis-en un.",
+    site: "Sur ce site",
+    onAncestry: "Sur Ancestry",
+    onMyHeritage: "Sur MyHeritage",
+    treeviz: "TreeViz",
+    update: "\xC9crire les champs coch\xE9s",
+    updateSource: "Mettre \xE0 jour {{source}}",
+    updateTree: "Mettre \xE0 jour dans TreeViz",
+    updatedTree: "\xC9crit dans TreeViz.",
+    addedRelatives: "Ajout\xE9 \xE0 TreeViz : {{names}}",
+    nothingToAdd: "TreeViz a d\xE9j\xE0 tous les noms de cette page.",
+    treeClosed: "Ouvre cet arbre dans TreeViz, puis r\xE9essaie.",
+    ambiguous: "Plus d'une personne dans l'arbre porte ce nom : {{names}}",
+    relativesNotWritten: "Les proches ne sont pas \xE9crits sur le site source avec cette mise en page.",
+    warning: "La modification reste sur ce site. TreeViz ne peut pas l'annuler. Seuls les champs coch\xE9s sont \xE9crits.",
+    layout: "TreeViz Connector ne conna\xEEt pas cette mise en page, donc il n'\xE9crit pas.",
+    noDiff: "TreeViz et ce site correspondent.",
+    openSource: "Ouvrir pour v\xE9rifier",
+    compare: "V\xE9rifie cette personne sur le site source.",
+    wrote: "\xC9crit.",
+    failed: "\xC9criture impossible.",
+    openEdit: "Ouvrir l'\xE9diteur pour comparer",
+    whichPerson: "Ouvre le profil de la personne, ou l'\xE9diteur.",
+    offline: "L'\xE9criture a besoin du r\xE9seau.",
+    name: "Nom",
+    sex: "Sexe",
+    female: "femme",
+    male: "homme",
+    birthDate: "Date de naissance",
+    birthPlace: "Lieu de naissance",
+    deathDate: "Date de d\xE9c\xE8s",
+    deathPlace: "Lieu de d\xE9c\xE8s",
+    marriageDate: "Date de mariage",
+    marriagePlace: "Lieu de mariage",
+    parents: "Parents",
+    spouses: "Conjoints",
+    children: "Enfants",
+    fact: "Fait",
+    factsStale: "Ces donn\xE9es TreeViz n'ont pas encore les autres faits. Actualise l'onglet TreeViz pour qu'il renvoie l'arbre.",
+    factNotWritten: "Ce fait n'est pas \xE9crit sur le site source avec cette mise en page.",
+    relativesStale: "Ces donn\xE9es TreeViz n'ont pas encore les proches. Actualise l'onglet TreeViz pour qu'il renvoie l'arbre.",
+    missingFact: "Le fait n'est pas sur cette page.",
+    batchDone: "La mise \xE0 jour Ancestry est termin\xE9e.",
+    openApp: "Ouvrir TreeViz",
+    hide: "Masquer",
+    showPanel: "Afficher le panneau",
+    panelShown: "Le panneau est de nouveau visible sur cette page.",
+    panelMissing: "Cette page n'a pas de panneau TreeViz Connector.",
+    persons: "{{count}} personnes",
+    log: "Journal",
+    copyLog: "Copier le journal",
+    copiedLog: "Journal copi\xE9."
+  };
+  var ES = {
+    title: "TreeViz Connector",
+    signIn: "Entra en TreeViz y abre el \xE1rbol en este navegador.",
+    cached: "Los datos de TreeViz est\xE1n en este navegador desde {{time}}.",
+    notInTree: "Esta persona no est\xE1 en el \xE1rbol de TreeViz abierto.",
+    inTree: "Esta persona est\xE1 en el \xE1rbol de TreeViz: {{tree}}.",
+    pickTree: "M\xE1s de un \xE1rbol de TreeViz contiene a esta persona. Elige uno.",
+    site: "En este sitio",
+    onAncestry: "En Ancestry",
+    onMyHeritage: "En MyHeritage",
+    treeviz: "TreeViz",
+    update: "Escribir los campos marcados",
+    updateSource: "Actualizar {{source}}",
+    updateTree: "Actualizar en TreeViz",
+    updatedTree: "Escrito en TreeViz.",
+    addedRelatives: "A\xF1adido a TreeViz: {{names}}",
+    nothingToAdd: "TreeViz ya tiene todos los nombres de esta p\xE1gina.",
+    treeClosed: "Abre este \xE1rbol en TreeViz y vuelve a intentarlo.",
+    ambiguous: "M\xE1s de una persona del \xE1rbol tiene este nombre: {{names}}",
+    relativesNotWritten: "Los parientes no se escriben en el sitio de origen con este dise\xF1o.",
+    warning: "El cambio se queda en este sitio. TreeViz no puede deshacerlo. Solo se escriben los campos marcados.",
+    layout: "TreeViz Connector no conoce este dise\xF1o de p\xE1gina, as\xED que no escribe.",
+    noDiff: "TreeViz y este sitio coinciden.",
+    openSource: "Abrir para revisar",
+    compare: "Revisa a esta persona en el sitio de origen.",
+    wrote: "Escrito.",
+    failed: "No se ha podido escribir.",
+    openEdit: "Abrir el editor para comparar",
+    whichPerson: "Abre el perfil de la persona o el editor.",
+    offline: "Para escribir hace falta conexi\xF3n.",
+    name: "Nombre",
+    sex: "Sexo",
+    female: "mujer",
+    male: "hombre",
+    birthDate: "Fecha de nacimiento",
+    birthPlace: "Lugar de nacimiento",
+    deathDate: "Fecha de defunci\xF3n",
+    deathPlace: "Lugar de defunci\xF3n",
+    marriageDate: "Fecha de matrimonio",
+    marriagePlace: "Lugar de matrimonio",
+    parents: "Padres",
+    spouses: "C\xF3nyuges",
+    children: "Hijos",
+    fact: "Hecho",
+    factsStale: "Estos datos de TreeViz a\xFAn no tienen los otros hechos. Recarga la pesta\xF1a de TreeViz para que vuelva a enviar el \xE1rbol.",
+    factNotWritten: "Este hecho no se escribe en el sitio de origen con este dise\xF1o.",
+    relativesStale: "Estos datos de TreeViz a\xFAn no tienen parientes. Recarga la pesta\xF1a de TreeViz para que vuelva a enviar el \xE1rbol.",
+    missingFact: "El hecho no est\xE1 en esta p\xE1gina.",
+    batchDone: "La actualizaci\xF3n de Ancestry ha terminado.",
+    openApp: "Abrir TreeViz",
+    hide: "Ocultar",
+    showPanel: "Mostrar el panel",
+    panelShown: "El panel vuelve a verse en esta p\xE1gina.",
+    panelMissing: "Esta p\xE1gina no tiene panel de TreeViz Connector.",
+    persons: "{{count}} personas",
+    log: "Registro",
+    copyLog: "Copiar registro",
+    copiedLog: "Registro copiado."
+  };
+  var RU = {
+    title: "TreeViz Connector",
+    signIn: "\u0412\u043E\u0439\u0434\u0438 \u0432 TreeViz \u0438 \u043E\u0442\u043A\u0440\u043E\u0439 \u0434\u0435\u0440\u0435\u0432\u043E \u0432 \u044D\u0442\u043E\u043C \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435.",
+    cached: "\u0414\u0430\u043D\u043D\u044B\u0435 TreeViz \u0432 \u044D\u0442\u043E\u043C \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435 \u0441 {{time}}.",
+    notInTree: "\u042D\u0442\u043E\u0433\u043E \u0447\u0435\u043B\u043E\u0432\u0435\u043A\u0430 \u043D\u0435\u0442 \u0432 \u043E\u0442\u043A\u0440\u044B\u0442\u043E\u043C \u0434\u0435\u0440\u0435\u0432\u0435 TreeViz.",
+    inTree: "\u042D\u0442\u043E\u0442 \u0447\u0435\u043B\u043E\u0432\u0435\u043A \u0435\u0441\u0442\u044C \u0432 \u0434\u0435\u0440\u0435\u0432\u0435 TreeViz: {{tree}}.",
+    pickTree: "\u042D\u0442\u043E\u0442 \u0447\u0435\u043B\u043E\u0432\u0435\u043A \u0435\u0441\u0442\u044C \u0432 \u043D\u0435\u0441\u043A\u043E\u043B\u044C\u043A\u0438\u0445 \u0434\u0435\u0440\u0435\u0432\u044C\u044F\u0445 TreeViz. \u0412\u044B\u0431\u0435\u0440\u0438 \u043E\u0434\u043D\u043E.",
+    site: "\u041D\u0430 \u044D\u0442\u043E\u043C \u0441\u0430\u0439\u0442\u0435",
+    onAncestry: "\u041D\u0430 Ancestry",
+    onMyHeritage: "\u041D\u0430 MyHeritage",
+    treeviz: "TreeViz",
+    update: "\u0417\u0430\u043F\u0438\u0441\u0430\u0442\u044C \u043E\u0442\u043C\u0435\u0447\u0435\u043D\u043D\u044B\u0435 \u043F\u043E\u043B\u044F",
+    updateSource: "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C {{source}}",
+    updateTree: "\u041E\u0431\u043D\u043E\u0432\u0438\u0442\u044C \u0432 TreeViz",
+    updatedTree: "\u0417\u0430\u043F\u0438\u0441\u0430\u043D\u043E \u0432 TreeViz.",
+    addedRelatives: "\u0414\u043E\u0431\u0430\u0432\u043B\u0435\u043D\u043E \u0432 TreeViz: {{names}}",
+    nothingToAdd: "\u0412 TreeViz \u0443\u0436\u0435 \u0435\u0441\u0442\u044C \u0432\u0441\u0435 \u0438\u043C\u0435\u043D\u0430 \u0441 \u044D\u0442\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B.",
+    treeClosed: "\u041E\u0442\u043A\u0440\u043E\u0439 \u044D\u0442\u043E \u0434\u0435\u0440\u0435\u0432\u043E \u0432 TreeViz \u0438 \u043F\u043E\u043F\u0440\u043E\u0431\u0443\u0439 \u0441\u043D\u043E\u0432\u0430.",
+    ambiguous: "\u0412 \u0434\u0435\u0440\u0435\u0432\u0435 \u0431\u043E\u043B\u044C\u0448\u0435 \u043E\u0434\u043D\u043E\u0433\u043E \u0447\u0435\u043B\u043E\u0432\u0435\u043A\u0430 \u0441 \u0442\u0430\u043A\u0438\u043C \u0438\u043C\u0435\u043D\u0435\u043C: {{names}}",
+    relativesNotWritten: "\u0420\u043E\u0434\u0441\u0442\u0432\u0435\u043D\u043D\u0438\u043A\u043E\u0432 \u0432 \u044D\u0442\u043E\u0439 \u0440\u0430\u0441\u043A\u043B\u0430\u0434\u043A\u0435 \u043D\u0430 \u0441\u0430\u0439\u0442-\u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A \u043D\u0435 \u0437\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442.",
+    warning: "\u0418\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u043E\u0441\u0442\u0430\u043D\u0435\u0442\u0441\u044F \u043D\u0430 \u044D\u0442\u043E\u043C \u0441\u0430\u0439\u0442\u0435. TreeViz \u043D\u0435 \u0441\u043C\u043E\u0436\u0435\u0442 \u0435\u0433\u043E \u043E\u0442\u043C\u0435\u043D\u0438\u0442\u044C. \u0417\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u044E\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043E\u0442\u043C\u0435\u0447\u0435\u043D\u043D\u044B\u0435 \u043F\u043E\u043B\u044F.",
+    layout: "TreeViz Connector \u043D\u0435 \u0437\u043D\u0430\u0435\u0442 \u044D\u0442\u0443 \u0440\u0430\u0441\u043A\u043B\u0430\u0434\u043A\u0443 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438 \u043F\u043E\u044D\u0442\u043E\u043C\u0443 \u043D\u0435 \u0437\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442.",
+    noDiff: "TreeViz \u0438 \u044D\u0442\u043E\u0442 \u0441\u0430\u0439\u0442 \u0441\u043E\u0432\u043F\u0430\u0434\u0430\u044E\u0442.",
+    openSource: "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0434\u043B\u044F \u043F\u0440\u043E\u0432\u0435\u0440\u043A\u0438",
+    compare: "\u041F\u0440\u043E\u0432\u0435\u0440\u044C \u044D\u0442\u043E\u0433\u043E \u0447\u0435\u043B\u043E\u0432\u0435\u043A\u0430 \u043D\u0430 \u0441\u0430\u0439\u0442\u0435-\u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A\u0435.",
+    wrote: "\u0417\u0430\u043F\u0438\u0441\u0430\u043D\u043E.",
+    failed: "\u041D\u0435 \u0443\u0434\u0430\u043B\u043E\u0441\u044C \u0437\u0430\u043F\u0438\u0441\u0430\u0442\u044C.",
+    openEdit: "\u041E\u0442\u043A\u0440\u044B\u0442\u044C \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440 \u0434\u043B\u044F \u0441\u0440\u0430\u0432\u043D\u0435\u043D\u0438\u044F",
+    whichPerson: "\u041E\u0442\u043A\u0440\u043E\u0439 \u043F\u0440\u043E\u0444\u0438\u043B\u044C \u0447\u0435\u043B\u043E\u0432\u0435\u043A\u0430 \u0438\u043B\u0438 \u0440\u0435\u0434\u0430\u043A\u0442\u043E\u0440.",
+    offline: "\u0414\u043B\u044F \u0437\u0430\u043F\u0438\u0441\u0438 \u043D\u0443\u0436\u043D\u0430 \u0441\u0435\u0442\u044C.",
+    name: "\u0418\u043C\u044F",
+    sex: "\u041F\u043E\u043B",
+    female: "\u0436\u0435\u043D\u0449\u0438\u043D\u0430",
+    male: "\u043C\u0443\u0436\u0447\u0438\u043D\u0430",
+    birthDate: "\u0414\u0430\u0442\u0430 \u0440\u043E\u0436\u0434\u0435\u043D\u0438\u044F",
+    birthPlace: "\u041C\u0435\u0441\u0442\u043E \u0440\u043E\u0436\u0434\u0435\u043D\u0438\u044F",
+    deathDate: "\u0414\u0430\u0442\u0430 \u0441\u043C\u0435\u0440\u0442\u0438",
+    deathPlace: "\u041C\u0435\u0441\u0442\u043E \u0441\u043C\u0435\u0440\u0442\u0438",
+    marriageDate: "\u0414\u0430\u0442\u0430 \u0431\u0440\u0430\u043A\u0430",
+    marriagePlace: "\u041C\u0435\u0441\u0442\u043E \u0431\u0440\u0430\u043A\u0430",
+    parents: "\u0420\u043E\u0434\u0438\u0442\u0435\u043B\u0438",
+    spouses: "\u0421\u0443\u043F\u0440\u0443\u0433\u0438",
+    children: "\u0414\u0435\u0442\u0438",
+    fact: "\u0424\u0430\u043A\u0442",
+    factsStale: "\u0412 \u044D\u0442\u0438\u0445 \u0434\u0430\u043D\u043D\u044B\u0445 TreeViz \u0435\u0449\u0451 \u043D\u0435\u0442 \u043E\u0441\u0442\u0430\u043B\u044C\u043D\u044B\u0445 \u0444\u0430\u043A\u0442\u043E\u0432. \u041E\u0431\u043D\u043E\u0432\u0438 \u0432\u043A\u043B\u0430\u0434\u043A\u0443 TreeViz, \u0447\u0442\u043E\u0431\u044B \u0434\u0435\u0440\u0435\u0432\u043E \u043E\u0442\u043F\u0440\u0430\u0432\u0438\u043B\u043E\u0441\u044C \u0441\u043D\u043E\u0432\u0430.",
+    factNotWritten: "\u042D\u0442\u043E\u0442 \u0444\u0430\u043A\u0442 \u0432 \u044D\u0442\u043E\u0439 \u0440\u0430\u0441\u043A\u043B\u0430\u0434\u043A\u0435 \u043D\u0430 \u0441\u0430\u0439\u0442-\u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A \u043D\u0435 \u0437\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442\u0441\u044F.",
+    relativesStale: "\u0412 \u044D\u0442\u0438\u0445 \u0434\u0430\u043D\u043D\u044B\u0445 TreeViz \u0435\u0449\u0451 \u043D\u0435\u0442 \u0440\u043E\u0434\u0441\u0442\u0432\u0435\u043D\u043D\u0438\u043A\u043E\u0432. \u041E\u0431\u043D\u043E\u0432\u0438 \u0432\u043A\u043B\u0430\u0434\u043A\u0443 TreeViz, \u0447\u0442\u043E\u0431\u044B \u0434\u0435\u0440\u0435\u0432\u043E \u043E\u0442\u043F\u0440\u0430\u0432\u0438\u043B\u043E\u0441\u044C \u0441\u043D\u043E\u0432\u0430.",
+    missingFact: "\u042D\u0442\u043E\u0433\u043E \u0444\u0430\u043A\u0442\u0430 \u043D\u0435\u0442 \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435.",
+    batchDone: "\u041E\u0431\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u0435 Ancestry \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043D\u043E.",
+    openApp: "\u041E\u0442\u043A\u0440\u044B\u0442\u044C TreeViz",
+    hide: "\u0421\u043A\u0440\u044B\u0442\u044C",
+    showPanel: "\u041F\u043E\u043A\u0430\u0437\u0430\u0442\u044C \u043F\u0430\u043D\u0435\u043B\u044C",
+    panelShown: "\u041F\u0430\u043D\u0435\u043B\u044C \u0441\u043D\u043E\u0432\u0430 \u0432\u0438\u0434\u043D\u0430 \u043D\u0430 \u044D\u0442\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435.",
+    panelMissing: "\u041D\u0430 \u044D\u0442\u043E\u0439 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435 \u043D\u0435\u0442 \u043F\u0430\u043D\u0435\u043B\u0438 TreeViz Connector.",
+    persons: "{{count}} \u0447\u0435\u043B.",
+    log: "\u0416\u0443\u0440\u043D\u0430\u043B",
+    copyLog: "\u041A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0436\u0443\u0440\u043D\u0430\u043B",
+    copiedLog: "\u0416\u0443\u0440\u043D\u0430\u043B \u0441\u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D."
+  };
+  var JA = {
+    title: "TreeViz Connector",
+    signIn: "\u3053\u306E\u30D6\u30E9\u30A6\u30B6\u3067 TreeViz \u306B\u30B5\u30A4\u30F3\u30A4\u30F3\u3057\u3066\u3001\u5BB6\u7CFB\u56F3\u3092\u958B\u3044\u3066\u3002",
+    cached: "TreeViz \u306E\u30C7\u30FC\u30BF\u306F {{time}} \u304B\u3089\u3053\u306E\u30D6\u30E9\u30A6\u30B6\u306B\u3042\u308B\u3002",
+    notInTree: "\u3053\u306E\u4EBA\u306F\u958B\u3044\u3066\u3044\u308B TreeViz \u306E\u5BB6\u7CFB\u56F3\u306B\u3044\u306A\u3044\u3002",
+    inTree: "\u3053\u306E\u4EBA\u306F TreeViz \u306E\u5BB6\u7CFB\u56F3\u306B\u3044\u308B: {{tree}}\u3002",
+    pickTree: "\u3053\u306E\u4EBA\u304C\u8907\u6570\u306E TreeViz \u5BB6\u7CFB\u56F3\u306B\u3044\u308B\u3002\u4E00\u3064\u9078\u3093\u3067\u3002",
+    site: "\u3053\u306E\u30B5\u30A4\u30C8",
+    onAncestry: "Ancestry",
+    onMyHeritage: "MyHeritage",
+    treeviz: "TreeViz",
+    update: "\u9078\u3093\u3060\u9805\u76EE\u3092\u66F8\u304D\u8FBC\u3080",
+    updateSource: "{{source}} \u3092\u66F4\u65B0",
+    updateTree: "TreeViz \u3092\u66F4\u65B0",
+    updatedTree: "TreeViz \u306B\u66F8\u304D\u8FBC\u3093\u3060\u3002",
+    addedRelatives: "TreeViz \u306B\u8FFD\u52A0: {{names}}",
+    nothingToAdd: "\u3053\u306E\u30DA\u30FC\u30B8\u306E\u540D\u524D\u306F\u3059\u3067\u306B TreeViz \u306B\u3042\u308B\u3002",
+    treeClosed: "\u3053\u306E\u5BB6\u7CFB\u56F3\u3092 TreeViz \u3067\u958B\u3044\u3066\u3001\u3082\u3046\u4E00\u5EA6\u8A66\u3057\u3066\u3002",
+    ambiguous: "\u540C\u3058\u540D\u524D\u306E\u4EBA\u304C\u8907\u6570\u3044\u308B: {{names}}",
+    relativesNotWritten: "\u3053\u306E\u30EC\u30A4\u30A2\u30A6\u30C8\u3067\u306F\u89AA\u65CF\u3092\u5143\u306E\u30B5\u30A4\u30C8\u306B\u66F8\u304D\u8FBC\u307E\u306A\u3044\u3002",
+    warning: "\u5909\u66F4\u306F\u3053\u306E\u30B5\u30A4\u30C8\u306B\u6B8B\u308B\u3002TreeViz \u306F\u53D6\u308A\u6D88\u305B\u306A\u3044\u3002\u30C1\u30A7\u30C3\u30AF\u3057\u305F\u9805\u76EE\u3060\u3051\u66F8\u304D\u8FBC\u3080\u3002",
+    layout: "TreeViz Connector \u306F\u3053\u306E\u30DA\u30FC\u30B8\u306E\u30EC\u30A4\u30A2\u30A6\u30C8\u3092\u77E5\u3089\u306A\u3044\u306E\u3067\u3001\u66F8\u304D\u8FBC\u307E\u306A\u3044\u3002",
+    noDiff: "TreeViz \u3068\u3053\u306E\u30B5\u30A4\u30C8\u306F\u4E00\u81F4\u3057\u3066\u3044\u308B\u3002",
+    openSource: "\u78BA\u8A8D\u306E\u305F\u3081\u306B\u958B\u304F",
+    compare: "\u5143\u306E\u30B5\u30A4\u30C8\u3067\u3053\u306E\u4EBA\u3092\u78BA\u8A8D\u3057\u3066\u3002",
+    wrote: "\u66F8\u304D\u8FBC\u3093\u3060\u3002",
+    failed: "\u66F8\u304D\u8FBC\u3081\u306A\u304B\u3063\u305F\u3002",
+    openEdit: "\u6BD4\u8F03\u3059\u308B\u305F\u3081\u306B\u7DE8\u96C6\u753B\u9762\u3092\u958B\u304F",
+    whichPerson: "\u4EBA\u7269\u306E\u30D7\u30ED\u30D5\u30A3\u30FC\u30EB\u304B\u7DE8\u96C6\u753B\u9762\u3092\u958B\u3044\u3066\u3002",
+    offline: "\u66F8\u304D\u8FBC\u307F\u306B\u306F\u30CD\u30C3\u30C8\u63A5\u7D9A\u304C\u5FC5\u8981\u3002",
+    name: "\u540D\u524D",
+    sex: "\u6027\u5225",
+    female: "\u5973\u6027",
+    male: "\u7537\u6027",
+    birthDate: "\u751F\u5E74\u6708\u65E5",
+    birthPlace: "\u51FA\u751F\u5730",
+    deathDate: "\u6B7B\u4EA1\u65E5",
+    deathPlace: "\u6B7B\u4EA1\u5730",
+    marriageDate: "\u7D50\u5A5A\u65E5",
+    marriagePlace: "\u7D50\u5A5A\u5730",
+    parents: "\u89AA",
+    spouses: "\u914D\u5076\u8005",
+    children: "\u5B50\u3069\u3082",
+    fact: "\u4E8B\u5B9F",
+    factsStale: "\u3053\u306E TreeViz \u30C7\u30FC\u30BF\u306B\u306F\u307E\u3060\u4ED6\u306E\u4E8B\u5B9F\u304C\u306A\u3044\u3002TreeViz \u306E\u30BF\u30D6\u3092\u66F4\u65B0\u3057\u3066\u3001\u5BB6\u7CFB\u56F3\u3092\u9001\u308A\u76F4\u3057\u3066\u3002",
+    factNotWritten: "\u3053\u306E\u4E8B\u5B9F\u306F\u3053\u306E\u30EC\u30A4\u30A2\u30A6\u30C8\u3067\u306F\u5143\u306E\u30B5\u30A4\u30C8\u306B\u66F8\u304D\u8FBC\u307E\u306A\u3044\u3002",
+    relativesStale: "\u3053\u306E TreeViz \u30C7\u30FC\u30BF\u306B\u306F\u307E\u3060\u89AA\u65CF\u304C\u3044\u306A\u3044\u3002TreeViz \u306E\u30BF\u30D6\u3092\u66F4\u65B0\u3057\u3066\u3001\u5BB6\u7CFB\u56F3\u3092\u9001\u308A\u76F4\u3057\u3066\u3002",
+    missingFact: "\u3053\u306E\u4E8B\u5B9F\u306F\u3053\u306E\u30DA\u30FC\u30B8\u306B\u306A\u3044\u3002",
+    batchDone: "Ancestry \u306E\u66F4\u65B0\u304C\u7D42\u308F\u3063\u305F\u3002",
+    openApp: "TreeViz \u3092\u958B\u304F",
+    hide: "\u96A0\u3059",
+    showPanel: "\u30D1\u30CD\u30EB\u3092\u8868\u793A",
+    panelShown: "\u3053\u306E\u30DA\u30FC\u30B8\u3067\u30D1\u30CD\u30EB\u304C\u518D\u3073\u898B\u3048\u308B\u3002",
+    panelMissing: "\u3053\u306E\u30DA\u30FC\u30B8\u306B\u306F TreeViz Connector \u306E\u30D1\u30CD\u30EB\u304C\u306A\u3044\u3002",
+    persons: "{{count}} \u4EBA",
+    log: "\u30ED\u30B0",
+    copyLog: "\u30ED\u30B0\u3092\u30B3\u30D4\u30FC",
+    copiedLog: "\u30ED\u30B0\u3092\u30B3\u30D4\u30FC\u3057\u305F\u3002"
+  };
+  var ZH = {
+    title: "TreeViz Connector",
+    signIn: "\u5728\u8FD9\u4E2A\u6D4F\u89C8\u5668\u91CC\u767B\u5F55 TreeViz\uFF0C\u5E76\u6253\u5F00\u5BB6\u8C31\u3002",
+    cached: "TreeViz \u6570\u636E\u4ECE {{time}} \u8D77\u5C31\u5728\u8FD9\u4E2A\u6D4F\u89C8\u5668\u91CC\u3002",
+    notInTree: "\u8FD9\u4E2A\u4EBA\u4E0D\u5728\u5F53\u524D\u6253\u5F00\u7684 TreeViz \u5BB6\u8C31\u91CC\u3002",
+    inTree: "\u8FD9\u4E2A\u4EBA\u5728 TreeViz \u5BB6\u8C31\u91CC\uFF1A{{tree}}\u3002",
+    pickTree: "\u4E0D\u6B62\u4E00\u4E2A TreeViz \u5BB6\u8C31\u5305\u542B\u8FD9\u4E2A\u4EBA\u3002\u9009\u4E00\u4E2A\u3002",
+    site: "\u5728\u8FD9\u4E2A\u7F51\u7AD9\u4E0A",
+    onAncestry: "\u5728 Ancestry \u4E0A",
+    onMyHeritage: "\u5728 MyHeritage \u4E0A",
+    treeviz: "TreeViz",
+    update: "\u5199\u5165\u9009\u4E2D\u7684\u5B57\u6BB5",
+    updateSource: "\u66F4\u65B0 {{source}}",
+    updateTree: "\u5728 TreeViz \u4E2D\u66F4\u65B0",
+    updatedTree: "\u5DF2\u5199\u5165 TreeViz\u3002",
+    addedRelatives: "\u5DF2\u52A0\u5165 TreeViz\uFF1A{{names}}",
+    nothingToAdd: "TreeViz \u91CC\u5DF2\u7ECF\u6709\u8FD9\u4E00\u9875\u4E0A\u7684\u6240\u6709\u59D3\u540D\u3002",
+    treeClosed: "\u5728 TreeViz \u91CC\u6253\u5F00\u8FD9\u4E2A\u5BB6\u8C31\uFF0C\u7136\u540E\u518D\u8BD5\u4E00\u6B21\u3002",
+    ambiguous: "\u5BB6\u8C31\u91CC\u6709\u4E0D\u6B62\u4E00\u4E2A\u540C\u540D\u7684\u4EBA\uFF1A{{names}}",
+    relativesNotWritten: "\u8FD9\u79CD\u7248\u5F0F\u4E0D\u4F1A\u628A\u4EB2\u5C5E\u5199\u56DE\u6E90\u7F51\u7AD9\u3002",
+    warning: "\u4FEE\u6539\u4F1A\u7559\u5728\u8FD9\u4E2A\u7F51\u7AD9\u4E0A\u3002TreeViz \u4E0D\u80FD\u64A4\u9500\u3002\u53EA\u4F1A\u5199\u5165\u52FE\u9009\u7684\u5B57\u6BB5\u3002",
+    layout: "TreeViz Connector \u4E0D\u8BA4\u8BC6\u8FD9\u4E2A\u9875\u9762\u7248\u5F0F\uFF0C\u6240\u4EE5\u4E0D\u4F1A\u5199\u5165\u3002",
+    noDiff: "TreeViz \u548C\u8FD9\u4E2A\u7F51\u7AD9\u4E00\u81F4\u3002",
+    openSource: "\u6253\u5F00\u4EE5\u6838\u5BF9",
+    compare: "\u5728\u6E90\u7F51\u7AD9\u4E0A\u6838\u5BF9\u8FD9\u4E2A\u4EBA\u3002",
+    wrote: "\u5DF2\u5199\u5165\u3002",
+    failed: "\u6CA1\u80FD\u5199\u5165\u3002",
+    openEdit: "\u6253\u5F00\u7F16\u8F91\u9875\u4EE5\u4FBF\u6BD4\u8F83",
+    whichPerson: "\u6253\u5F00\u8FD9\u4E2A\u4EBA\u7684\u8D44\u6599\u9875\u6216\u7F16\u8F91\u9875\u3002",
+    offline: "\u5199\u5165\u9700\u8981\u7F51\u7EDC\u3002",
+    name: "\u59D3\u540D",
+    sex: "\u6027\u522B",
+    female: "\u5973",
+    male: "\u7537",
+    birthDate: "\u51FA\u751F\u65E5\u671F",
+    birthPlace: "\u51FA\u751F\u5730",
+    deathDate: "\u6B7B\u4EA1\u65E5\u671F",
+    deathPlace: "\u6B7B\u4EA1\u5730",
+    marriageDate: "\u7ED3\u5A5A\u65E5\u671F",
+    marriagePlace: "\u7ED3\u5A5A\u5730",
+    parents: "\u7236\u6BCD",
+    spouses: "\u914D\u5076",
+    children: "\u5B50\u5973",
+    fact: "\u4E8B\u5B9E",
+    factsStale: "\u8FD9\u4EFD TreeViz \u6570\u636E\u91CC\u8FD8\u6CA1\u6709\u5176\u4ED6\u4E8B\u5B9E\u3002\u5237\u65B0 TreeViz \u6807\u7B7E\u9875\uFF0C\u8BA9\u5B83\u91CD\u65B0\u53D1\u9001\u5BB6\u8C31\u3002",
+    factNotWritten: "\u8FD9\u79CD\u7248\u5F0F\u4E0D\u4F1A\u628A\u8FD9\u6761\u4E8B\u5B9E\u5199\u56DE\u6E90\u7F51\u7AD9\u3002",
+    relativesStale: "\u8FD9\u4EFD TreeViz \u6570\u636E\u91CC\u8FD8\u6CA1\u6709\u4EB2\u5C5E\u3002\u5237\u65B0 TreeViz \u6807\u7B7E\u9875\uFF0C\u8BA9\u5B83\u91CD\u65B0\u53D1\u9001\u5BB6\u8C31\u3002",
+    missingFact: "\u8FD9\u4E00\u9875\u4E0A\u6CA1\u6709\u8FD9\u6761\u4E8B\u5B9E\u3002",
+    batchDone: "Ancestry \u66F4\u65B0\u5DF2\u5B8C\u6210\u3002",
+    openApp: "\u6253\u5F00 TreeViz",
+    hide: "\u9690\u85CF",
+    showPanel: "\u663E\u793A\u9762\u677F",
+    panelShown: "\u9762\u677F\u5728\u8FD9\u4E00\u9875\u4E0A\u518D\u6B21\u53EF\u89C1\u3002",
+    panelMissing: "\u8FD9\u4E00\u9875\u6CA1\u6709 TreeViz Connector \u9762\u677F\u3002",
+    persons: "{{count}} \u4EBA",
+    log: "\u65E5\u5FD7",
+    copyLog: "\u590D\u5236\u65E5\u5FD7",
+    copiedLog: "\u65E5\u5FD7\u5DF2\u590D\u5236\u3002"
+  };
+  var LANGUAGES = ["hu", "en", "de", "fr", "es", "ru", "ja", "zh"];
+  var TABLES = {
+    hu: HU,
+    en: EN,
+    de: DE,
+    fr: FR,
+    es: ES,
+    ru: RU,
+    ja: JA,
+    zh: ZH
+  };
+  var LANGUAGE_KEY = "treevizConnectorLanguage";
+  var browserLanguage = () => {
+    const code = navigator.language.toLowerCase().slice(0, 2);
+    return LANGUAGES.includes(code) ? code : "en";
+  };
+  var language = browserLanguage();
+  var listeners = /* @__PURE__ */ new Set();
+  var applyLanguage = (next) => {
+    if (next === language) {
+      return;
+    }
+    language = next;
+    for (const listener of listeners) {
+      listener();
+    }
+  };
+  var onLanguage = (listener) => {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  };
+  var isConnectorLanguage = (value) => typeof value === "string" && LANGUAGES.includes(value);
+  var languageReady = new Promise((resolve) => {
+    if (typeof chrome === "undefined" || !chrome.storage?.local) {
+      resolve();
+      return;
+    }
+    chrome.storage.local.get(LANGUAGE_KEY, (items) => {
+      const stored = items[LANGUAGE_KEY];
+      if (isConnectorLanguage(stored)) {
+        applyLanguage(stored);
+      }
+      resolve();
+    });
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== "local" || !changes[LANGUAGE_KEY]) {
+        return;
+      }
+      const next = changes[LANGUAGE_KEY].newValue;
+      if (isConnectorLanguage(next)) {
+        applyLanguage(next);
+      }
+    });
+  });
   var t = (key, vars) => {
-    const table = navigator.language.toLowerCase().startsWith("hu") ? HU : EN;
-    let text = table[key];
+    let text = TABLES[language][key];
     if (vars) {
       for (const [name, value] of Object.entries(vars)) {
         text = text.replaceAll(`{{${name}}}`, value);
@@ -398,7 +805,7 @@
   // extensions/treeviz-connector/src/log.ts
   var LIMIT = 200;
   var lines = [];
-  var listeners = /* @__PURE__ */ new Set();
+  var listeners2 = /* @__PURE__ */ new Set();
   var stamp = () => (/* @__PURE__ */ new Date()).toISOString();
   var connectorLog = (scope, message, detail) => {
     const extra = detail === void 0 ? "" : ` ${typeof detail === "string" ? detail : JSON.stringify(detail)}`;
@@ -414,12 +821,12 @@
       });
     } catch {
     }
-    listeners.forEach((listener) => listener());
+    listeners2.forEach((listener) => listener());
   };
   var recentLogLines = () => lines.slice(-12);
   var subscribeLog = (listener) => {
-    listeners.add(listener);
-    return () => listeners.delete(listener);
+    listeners2.add(listener);
+    return () => listeners2.delete(listener);
   };
   var copyConnectorLog = async () => {
     const remote = await new Promise((resolve) => {
@@ -1541,6 +1948,12 @@
     href = marker;
     void renderMatch();
   };
-  tick();
-  window.setInterval(tick, 1e3);
+  void languageReady.then(() => {
+    tick();
+    window.setInterval(tick, 1e3);
+    onLanguage(() => {
+      href = "";
+      tick();
+    });
+  });
 })();

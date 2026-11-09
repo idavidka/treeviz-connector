@@ -1,4 +1,4 @@
-import { t } from "./i18n.js";
+import { LANGUAGE_NAMES, LANGUAGES, currentLanguage, languageReady, onLanguage, setLanguage, t, } from "./i18n.js";
 import { INDEX_KEY } from "./protocol.js";
 const TREEVIZ_URLS = [
     "https://treeviz.com/*",
@@ -12,11 +12,17 @@ const trees = document.querySelector("#trees");
 const openButton = document.querySelector("#open");
 const showButton = document.querySelector("#show");
 const note = document.querySelector("#note");
-if (openButton) {
-    openButton.textContent = t("openApp");
-}
-if (showButton) {
-    showButton.textContent = t("showPanel");
+const language = document.querySelector("#language");
+if (language instanceof HTMLSelectElement) {
+    for (const code of LANGUAGES) {
+        const option = document.createElement("option");
+        option.value = code;
+        option.textContent = LANGUAGE_NAMES[code];
+        language.append(option);
+    }
+    language.addEventListener("change", () => {
+        setLanguage(language.value);
+    });
 }
 const sourceLabel = (tree) => {
     if (tree.source === "ancestry") {
@@ -27,27 +33,44 @@ const sourceLabel = (tree) => {
     }
     return tree.source;
 };
-chrome.storage.local.get(INDEX_KEY, (items) => {
-    const index = items[INDEX_KEY];
-    if (!status || !trees) {
-        return;
+const render = () => {
+    if (language instanceof HTMLSelectElement) {
+        language.value = currentLanguage();
+        language.setAttribute("aria-label", LANGUAGE_NAMES[currentLanguage()]);
     }
-    if (!index || index.trees.length === 0) {
-        status.textContent = t("signIn");
-        return;
+    if (openButton) {
+        openButton.textContent = t("openApp");
     }
-    const when = new Date(index.publishedAt).toLocaleString();
-    status.textContent = t("cached", { time: when });
-    for (const tree of index.trees) {
-        const item = document.createElement("li");
-        item.className = "tree";
-        const name = document.createElement("strong");
-        name.textContent = tree.name;
-        const meta = document.createElement("span");
-        meta.textContent = `${sourceLabel(tree)} · ${t("persons", { count: String(tree.persons.length) })}`;
-        item.append(name, meta);
-        trees.append(item);
+    if (showButton) {
+        showButton.textContent = t("showPanel");
     }
+    chrome.storage.local.get(INDEX_KEY, (items) => {
+        const index = items[INDEX_KEY];
+        if (!status || !trees) {
+            return;
+        }
+        trees.replaceChildren();
+        if (!index || index.trees.length === 0) {
+            status.textContent = t("signIn");
+            return;
+        }
+        const when = new Date(index.publishedAt).toLocaleString();
+        status.textContent = t("cached", { time: when });
+        for (const tree of index.trees) {
+            const item = document.createElement("li");
+            item.className = "tree";
+            const name = document.createElement("strong");
+            name.textContent = tree.name;
+            const meta = document.createElement("span");
+            meta.textContent = `${sourceLabel(tree)} · ${t("persons", { count: String(tree.persons.length) })}`;
+            item.append(name, meta);
+            trees.append(item);
+        }
+    });
+};
+void languageReady.then(() => {
+    render();
+    onLanguage(render);
 });
 showButton?.addEventListener("click", () => {
     void chrome.tabs.query({ active: true, currentWindow: true }).then(async (found) => {

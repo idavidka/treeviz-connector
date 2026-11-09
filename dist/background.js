@@ -208,7 +208,10 @@ const acceptBatch = (message) => {
         people.push({
             treeId,
             personId,
-            facts: person.facts.filter((fact) => fact && typeof fact.type === "string" && fact.from && fact.to),
+            facts: person.facts.filter((fact) => fact &&
+                typeof fact.type === "string" &&
+                fact.from &&
+                fact.to),
         });
     }
     if (!people.length) {
@@ -247,7 +250,9 @@ const openBatchPerson = async (batch) => {
     await appendLog(`${new Date().toISOString()} [background] open ancestry ${person.treeId}/${person.personId} tab=${tabId ?? "none"}`);
     if (tabId != null) {
         window.setTimeout(() => {
-            chrome.tabs.sendMessage(tabId, { type: "connector:run-batch" }).catch(() => undefined);
+            chrome.tabs
+                .sendMessage(tabId, { type: "connector:run-batch" })
+                .catch(() => undefined);
         }, 1500);
     }
 };
@@ -365,7 +370,8 @@ const onMessage = (message, sender, sendResponse) => {
             const samePerson = Object.values(current).filter((item) => item.source === source && item.sourcePersonId === personId);
             sendResponse({
                 ok: true,
-                snapshot: current[key] || (samePerson.length === 1 ? samePerson[0] : undefined),
+                snapshot: current[key] ||
+                    (samePerson.length === 1 ? samePerson[0] : undefined),
             });
         });
         return true;
@@ -396,12 +402,18 @@ const onMessage = (message, sender, sendResponse) => {
                 sendResponse({ ok: false });
                 return;
             }
-            const extra = Array.isArray(body.errors) ? body.errors.map(String) : [];
+            const extra = Array.isArray(body.errors)
+                ? body.errors.map(String)
+                : [];
             batch.errors.push(...extra);
             batch.cursor += 1;
             if (batch.cursor >= batch.people.length) {
                 await storageRemove(chrome.storage.session, BATCH_KEY);
-                sendResponse({ ok: true, done: true, errors: batch.errors });
+                sendResponse({
+                    ok: true,
+                    done: true,
+                    errors: batch.errors,
+                });
                 return;
             }
             await openBatchPerson(batch);

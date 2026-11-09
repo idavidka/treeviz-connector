@@ -6,7 +6,7 @@ import {
 } from "../ancestry-writer.js";
 import type { SiteFacts } from "../compare.js";
 import { diffPerson, factTitleKey, foldName, sameName } from "../compare.js";
-import { t } from "../i18n.js";
+import { languageReady, onLanguage, t } from "../i18n.js";
 import { connectorLog } from "../log.js";
 import { loadIndex, matchTrees, personIn, preferActive, ask } from "../match.js";
 import { readLooseFacts } from "../page-facts.js";
@@ -932,5 +932,11 @@ chrome.runtime.onMessage.addListener((message) => {
 	}
 });
 
-tick();
-window.setInterval(tick, 1000);
+void languageReady.then(() => {
+	tick();
+	window.setInterval(tick, 1000);
+	onLanguage(() => {
+		href = "";
+		tick();
+	});
+});
