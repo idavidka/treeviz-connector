@@ -228,6 +228,8 @@
     inTree: "Ez a szem\xE9ly benne van a TreeViz-f\xE1ban: {{tree}}.",
     pickTree: "T\xF6bb TreeViz-fa is tartalmazza ezt a szem\xE9lyt. V\xE1lassz egyet.",
     site: "Az oldalon",
+    onAncestry: "Ancestryn",
+    onMyHeritage: "MyHeritagen",
     treeviz: "TreeViz",
     update: "Kijel\xF6ltek be\xEDr\xE1sa",
     warning: "A m\xF3dos\xEDt\xE1s az oldalon marad. A TreeViz nem tudja visszavonni. Csak a bejel\xF6lt mez\u0151k \xEDr\xF3dnak.",
@@ -272,6 +274,8 @@
     inTree: "This person is in the TreeViz tree: {{tree}}.",
     pickTree: "More than one TreeViz tree contains this person. Pick one.",
     site: "On this site",
+    onAncestry: "On Ancestry",
+    onMyHeritage: "On MyHeritage",
     treeviz: "TreeViz",
     update: "Write selected fields",
     warning: "The change stays on this site. TreeViz cannot undo it. Only checked fields are written.",
@@ -453,6 +457,16 @@
     document.getElementById(HOST_ID)?.remove();
   };
   var label = (key) => t(key);
+  var sourceLabel = () => {
+    const host = location.hostname.toLowerCase();
+    if (host.includes("ancestry")) {
+      return t("onAncestry");
+    }
+    if (host.includes("myheritage")) {
+      return t("onMyHeritage");
+    }
+    return t("site");
+  };
   var render = (host, model) => {
     const root = host.shadowRoot;
     if (!root) {
@@ -604,7 +618,7 @@
         name.className = "k";
         name.textContent = label(diff.key);
         const site = document.createElement("div");
-        site.textContent = `${t("site")}: ${diff.site || "\u2014"}`;
+        site.textContent = `${sourceLabel()}: ${diff.site || "\u2014"}`;
         const tree = document.createElement("div");
         tree.textContent = `${t("treeviz")}: ${diff.treeviz || "\u2014"}`;
         text.append(name, site, tree);
@@ -934,13 +948,13 @@
     });
   };
   var renderMatch = async () => {
-    const location = parseMyHeritageLocation(window.location.href);
-    if (!location?.siteId) {
+    const location2 = parseMyHeritageLocation(window.location.href);
+    if (!location2?.siteId) {
       connectorLog("myheritage", "url is not a tree or profile", window.location.href);
       return;
     }
     const formId = formPersonId();
-    const personId = location.personId || formId;
+    const personId = location2.personId || formId;
     if (!personId) {
       showPanel({ heading: t("title"), detail: t("whichPerson") });
       return;
@@ -953,8 +967,8 @@
     }
     connectorLog("myheritage", "page", {
       href: window.location.href,
-      kind: location.kind,
-      siteId: location.siteId,
+      kind: location2.kind,
+      siteId: location2.siteId,
       personId,
       formPersonId: formId,
       publishedAt: index.publishedAt,
@@ -964,7 +978,7 @@
         people: tree.persons.length
       }))
     });
-    const trees = matchTrees(index, "myheritage", location.siteId, personId);
+    const trees = matchTrees(index, "myheritage", location2.siteId, personId);
     if (!trees.length) {
       connectorLog("myheritage", "no matching tree");
       showPanel({
@@ -981,11 +995,11 @@
         detail: t("pickTree"),
         trees,
         cachedAt: index.publishedAt,
-        onPickTree: (tree) => showTree(tree, personId, location.siteId, index.publishedAt)
+        onPickTree: (tree) => showTree(tree, personId, location2.siteId, index.publishedAt)
       });
       return;
     }
-    showTree(preferred, personId, location.siteId, index.publishedAt);
+    showTree(preferred, personId, location2.siteId, index.publishedAt);
   };
   var href = "";
   var tick = () => {

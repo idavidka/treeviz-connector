@@ -34,6 +34,17 @@ const removeHost = (): void => {
 
 const label = (key: FieldKey): string => t(key);
 
+const sourceLabel = (): string => {
+	const host = location.hostname.toLowerCase();
+	if (host.includes("ancestry")) {
+		return t("onAncestry");
+	}
+	if (host.includes("myheritage")) {
+		return t("onMyHeritage");
+	}
+	return t("site");
+};
+
 const render = (host: HTMLElement, model: PanelModel): void => {
 	const root = host.shadowRoot;
 	if (!root) {
@@ -185,7 +196,7 @@ const render = (host: HTMLElement, model: PanelModel): void => {
 			name.className = "k";
 			name.textContent = label(diff.key);
 			const site = document.createElement("div");
-			site.textContent = `${t("site")}: ${diff.site || "—"}`;
+			site.textContent = `${sourceLabel()}: ${diff.site || "—"}`;
 			const tree = document.createElement("div");
 			tree.textContent = `${t("treeviz")}: ${diff.treeviz || "—"}`;
 			text.append(name, site, tree);

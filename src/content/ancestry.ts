@@ -191,9 +191,33 @@ const cleanRelativeName = (value: string): string =>
 	value
 		.split("\n")[0]
 		.trim()
-		.replace(/\s+\d{3,4}\s*[–-].*$/, "")
+		.replace(/^(?:edit|szerkesztés|szerkesztes|bearbeiten|modifier|modifica|editar)(?=\p{Lu})/iu, "")
+		.replace(/\s*\d{3,4}\s*[–—-].*$/, "")
+		.replace(/\d{3,4}\s*[–—-].*$/, "")
 		.replace(/\s*\(\d{3,4}[^)]*\)\s*$/, "")
 		.trim();
+
+const ACTION_LABEL =
+	/^(edit|szerkesztés|szerkesztes|bearbeiten|modifier|modifica|editar|view|megtekintés)$/i;
+
+const visibleName = (anchor: HTMLElement): string => {
+	const parts: string[] = [];
+	const walker = document.createTreeWalker(anchor, NodeFilter.SHOW_TEXT);
+	let node = walker.nextNode();
+	while (node) {
+		const parent = (node as Text).parentElement;
+		if (parent?.closest("button, [role='button']")) {
+			node = walker.nextNode();
+			continue;
+		}
+		const text = node.textContent?.replace(/\s+/g, " ").trim() ?? "";
+		if (text && !ACTION_LABEL.test(text) && !LIFESPAN.test(text)) {
+			parts.push(text);
+		}
+		node = walker.nextNode();
+	}
+	return cleanRelativeName(parts.join(" ") || anchor.textContent || "");
+};
 
 const LIFESPAN =
 	/^(abt\.?|about|ca\.?|c\.|cir\.?|circa|bef\.?|before|aft\.?|after|est\.?|cal\.?)?\s*\d{3,4}(\s*[–—-]\s*(\d{3,4})?)?$/i;
@@ -245,7 +269,7 @@ const pushName = (names: string[], value: string): void => {
 const namesAfter = (root: HTMLElement, start: HTMLElement, stop: string[]): string[] => {
 	const names: string[] = [];
 	for (const anchor of personAnchors(root, start, stop)) {
-		pushName(names, anchor.textContent || "");
+		pushName(names, visibleName(anchor));
 	}
 	return names;
 };
@@ -265,14 +289,14 @@ const splitHousehold = (
 		while (node && node !== root) {
 			const inside = anchors.filter((item) => node?.contains(item));
 			const firstLine = cleanRelativeName((node.innerText || "").split("\n")[0] || "");
-			const firstName = cleanRelativeName(inside[0]?.textContent || "");
+			const firstName = inside[0] ? visibleName(inside[0]) : "";
 			if (inside.length > 1 && inside[0] !== anchor && firstLine && firstLine === firstName) {
 				nested = true;
 				break;
 			}
 			node = node.parentElement;
 		}
-		pushName(lifespan || nested ? children : spouses, anchor.textContent || "");
+		pushName(lifespan || nested ? children : spouses, visibleName(anchor));
 	}
 	return { spouses, children };
 };
@@ -304,7 +328,12 @@ const sectionLines = (heading: HTMLElement, stop: string[]): string[] => {
 		if (stop.includes(key)) {
 			break;
 		}
-		if (/^(add|search)\b/i.test(line) || /hozzáad|hozzaad/i.test(line) || line.length > 60) {
+		if (
+			/^(add|search)\b/i.test(line) ||
+			/hozzáad|hozzaad/i.test(line) ||
+			ACTION_LABEL.test(line) ||
+			line.length > 60
+		) {
 			continue;
 		}
 		kept.push(line);

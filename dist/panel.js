@@ -12,6 +12,16 @@ const removeHost = () => {
     document.getElementById(HOST_ID)?.remove();
 };
 const label = (key) => t(key);
+const sourceLabel = () => {
+    const host = location.hostname.toLowerCase();
+    if (host.includes("ancestry")) {
+        return t("onAncestry");
+    }
+    if (host.includes("myheritage")) {
+        return t("onMyHeritage");
+    }
+    return t("site");
+};
 const render = (host, model) => {
     const root = host.shadowRoot;
     if (!root) {
@@ -164,7 +174,7 @@ const render = (host, model) => {
             name.className = "k";
             name.textContent = label(diff.key);
             const site = document.createElement("div");
-            site.textContent = `${t("site")}: ${diff.site || "—"}`;
+            site.textContent = `${sourceLabel()}: ${diff.site || "—"}`;
             const tree = document.createElement("div");
             tree.textContent = `${t("treeviz")}: ${diff.treeviz || "—"}`;
             text.append(name, site, tree);

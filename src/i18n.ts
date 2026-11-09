@@ -6,6 +6,8 @@ const HU = {
 	inTree: "Ez a személy benne van a TreeViz-fában: {{tree}}.",
 	pickTree: "Több TreeViz-fa is tartalmazza ezt a személyt. Válassz egyet.",
 	site: "Az oldalon",
+	onAncestry: "Ancestryn",
+	onMyHeritage: "MyHeritagen",
 	treeviz: "TreeViz",
 	update: "Kijelöltek beírása",
 	warning:
@@ -54,6 +56,8 @@ const EN: typeof HU = {
 	inTree: "This person is in the TreeViz tree: {{tree}}.",
 	pickTree: "More than one TreeViz tree contains this person. Pick one.",
 	site: "On this site",
+	onAncestry: "On Ancestry",
+	onMyHeritage: "On MyHeritage",
 	treeviz: "TreeViz",
 	update: "Write selected fields",
 	warning:
