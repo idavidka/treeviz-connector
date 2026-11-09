@@ -24,6 +24,10 @@ export type ConnectorPerson = {
 	marriagePlace?: string;
 	/** Absolute URL of this person on the source site. */
 	sourceUrl?: string;
+	/** Source person ids. Present only after TreeViz republishes the tree. */
+	parentIds?: string[];
+	spouseIds?: string[];
+	childIds?: string[];
 };
 
 export type ConnectorTree = {
@@ -69,7 +73,10 @@ export type FieldKey =
 	| "deathDate"
 	| "deathPlace"
 	| "marriageDate"
-	| "marriagePlace";
+	| "marriagePlace"
+	| "parents"
+	| "spouses"
+	| "children";
 
 export type FieldDiff = {
 	key: FieldKey;

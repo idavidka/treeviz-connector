@@ -89,6 +89,35 @@
     dezembro: 12
   };
   var collapse = (value) => (value ?? "").replace(/\s+/g, " ").trim();
+  var foldName = (value) => collapse(value).normalize("NFD").replace(/\p{Diacritic}/gu, "").toLocaleLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  var sameName = (left, right) => {
+    const a = foldName(left);
+    const b = foldName(right);
+    if (!a || !b) {
+      return false;
+    }
+    if (a === b) {
+      return true;
+    }
+    return a.split(" ").sort().join(" ") === b.split(" ").sort().join(" ");
+  };
+  var diffNameList = (key, siteNames, treeNames) => {
+    const unmatchedSite = siteNames.filter(
+      (siteName) => !treeNames.some((treeName) => sameName(siteName, treeName))
+    );
+    const unmatchedTree = treeNames.filter(
+      (treeName) => !siteNames.some((siteName) => sameName(siteName, treeName))
+    );
+    if (!unmatchedSite.length && !unmatchedTree.length) {
+      return void 0;
+    }
+    return {
+      key,
+      site: siteNames.join(", ") || void 0,
+      treeviz: treeNames.join(", ") || void 0,
+      writable: false
+    };
+  };
   var sameText = (left, right) => collapse(left).toLocaleLowerCase() === collapse(right).toLocaleLowerCase();
   var parseLooseDate = (value) => {
     const text = collapse(value);
@@ -510,9 +539,17 @@
     deathPlace: "Hal\xE1l helye",
     marriageDate: "H\xE1zass\xE1g d\xE1tuma",
     marriagePlace: "H\xE1zass\xE1g helye",
+    parents: "Sz\xFCl\u0151k",
+    spouses: "H\xE1zast\xE1rsak",
+    children: "Gyerekek",
+    relativesStale: "A TreeViz-adatban m\xE9g nincsenek rokonok. Friss\xEDtsd a TreeViz lapot, hogy \xFAjra elk\xFCldje a f\xE1t.",
     missingFact: "A t\xE9ny nem tal\xE1lhat\xF3 az oldalon.",
     batchDone: "Az Ancestry-friss\xEDt\xE9s k\xE9sz.",
     openApp: "TreeViz megnyit\xE1sa",
+    hide: "Elrejt\xE9s",
+    showPanel: "Panel megjelen\xEDt\xE9se",
+    panelShown: "A panel \xFAjra l\xE1tszik ezen a lapon.",
+    panelMissing: "Ezen a lapon nincs TreeViz Connector panel.",
     persons: "{{count}} szem\xE9ly",
     log: "Napl\xF3",
     copyLog: "Napl\xF3 m\xE1sol\xE1sa",
@@ -546,9 +583,17 @@
     deathPlace: "Death place",
     marriageDate: "Marriage date",
     marriagePlace: "Marriage place",
+    parents: "Parents",
+    spouses: "Spouses",
+    children: "Children",
+    relativesStale: "This TreeViz data has no relatives yet. Refresh the TreeViz tab so it sends the tree again.",
     missingFact: "The fact is not on this page.",
     batchDone: "The Ancestry update is finished.",
     openApp: "Open TreeViz",
+    hide: "Hide",
+    showPanel: "Show the panel",
+    panelShown: "The panel is visible on this page again.",
+    panelMissing: "This page has no TreeViz Connector panel.",
     persons: "{{count}} people",
     log: "Log",
     copyLog: "Copy log",
@@ -629,7 +674,16 @@
 
   // extensions/treeviz-connector/src/panel.ts
   var HOST_ID = "treeviz-connector-root";
+  var HIDDEN_KEY = "treevizConnectorPanelHidden";
   var current = { heading: "" };
+  var hidden = false;
+  var ready = false;
+  var persistHidden = (value) => {
+    chrome.storage.session.set({ [HIDDEN_KEY]: value });
+  };
+  var removeHost = () => {
+    document.getElementById(HOST_ID)?.remove();
+  };
   var label = (key) => t(key);
   var render = (host, model) => {
     const root = host.shadowRoot;
@@ -652,7 +706,17 @@
 			overflow: auto;
 			padding: 14px;
 		}
-		h2 { font-size: 15px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }
+		.head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+		h2 { font-size: 15px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+		button.hide {
+			height: 28px;
+			margin: 0;
+			flex: none;
+			background: #ffffff;
+			color: #344054;
+			border: 1px solid #e3e6ec;
+			box-shadow: none;
+		}
 		p { margin: 0 0 8px; color: #344054; }
 		.muted { color: #667085; font-size: 12px; }
 		.warn { color: #b54708; font-size: 12px; }
@@ -700,9 +764,21 @@
 	`;
     const card = document.createElement("div");
     card.className = "card";
+    const head = document.createElement("div");
+    head.className = "head";
     const title = document.createElement("h2");
     title.textContent = model.heading || t("title");
-    card.append(title);
+    const hide = document.createElement("button");
+    hide.type = "button";
+    hide.className = "hide";
+    hide.textContent = t("hide");
+    hide.addEventListener("click", () => {
+      hidden = true;
+      persistHidden(true);
+      removeHost();
+    });
+    head.append(title, hide);
+    card.append(head);
     if (model.detail) {
       const p = document.createElement("p");
       p.textContent = model.detail;
@@ -728,9 +804,14 @@
     }
     const selected = /* @__PURE__ */ new Set();
     if (model.diffs) {
-      if (model.diffs.length === 0) {
+      if (model.diffs.length === 0 && !model.relativesNote) {
         const p = document.createElement("p");
         p.textContent = t("noDiff");
+        card.append(p);
+      }
+      if (model.relativesNote) {
+        const p = document.createElement("p");
+        p.textContent = model.relativesNote;
         card.append(p);
       }
       for (const diff of model.diffs) {
@@ -820,6 +901,12 @@
   };
   var showPanel = (model) => {
     current = model;
+    if (!ready || hidden) {
+      if (hidden) {
+        removeHost();
+      }
+      return;
+    }
     let host = document.getElementById(HOST_ID);
     if (!host) {
       host = document.createElement("div");
@@ -833,6 +920,26 @@
     }
     render(host, model);
   };
+  chrome.storage.session.get(HIDDEN_KEY, (items) => {
+    hidden = Boolean(items[HIDDEN_KEY]);
+    ready = true;
+    if (current.heading || current.detail) {
+      showPanel(current);
+    }
+  });
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    const body = message;
+    if (body?.type !== "connector:show-panel") {
+      return;
+    }
+    hidden = false;
+    persistHidden(false);
+    const visible = Boolean(current.heading || current.detail);
+    if (visible) {
+      showPanel(current);
+    }
+    sendResponse({ ok: visible });
+  });
   subscribeLog(() => {
     const host = document.getElementById(HOST_ID);
     const pre = host?.shadowRoot?.querySelector("pre[data-connector-log]");
@@ -949,8 +1056,205 @@
       status: errors.length ? `${t("failed")} ${errors.join(", ")}` : t("wrote")
     });
   };
-  var siteValue = (site, key) => site[key];
-  var treeValue = (person, key) => person[key];
+  var siteValue = (site, key) => {
+    const value = site[key];
+    return typeof value === "string" ? value : void 0;
+  };
+  var treeValue = (person, key) => {
+    const value = person[key];
+    return typeof value === "string" ? value : void 0;
+  };
+  var leafHeading = (root, labels) => {
+    let found;
+    root.querySelectorAll("h1,h2,h3,h4,h5,div,span,p").forEach((node) => {
+      const el = node;
+      const text = el.innerText?.trim() ?? "";
+      if (!labels.includes(text.toLocaleLowerCase()) || text.length > 40) {
+        return;
+      }
+      if (!found || el.innerText.length < found.innerText.length) {
+        found = el;
+      }
+    });
+    return found;
+  };
+  var relationshipsRoot = () => {
+    const heading = leafHeading(document, [
+      "relationships",
+      "kapcsolatok",
+      "verwandtschaft",
+      "relations",
+      "relazioni",
+      "relaciones"
+    ]);
+    let node = heading?.parentElement;
+    while (node && node !== document.body) {
+      const text = node.innerText?.toLocaleLowerCase() ?? "";
+      if (text.includes("parents") || text.includes("sz\xFCl\u0151k") || text.includes("szulok")) {
+        return node;
+      }
+      node = node.parentElement;
+    }
+    return void 0;
+  };
+  var cleanRelativeName = (value) => value.split("\n")[0].trim().replace(/\s+\d{3,4}\s*[–-].*$/, "").replace(/\s*\(\d{3,4}[^)]*\)\s*$/, "").trim();
+  var LIFESPAN = /^(abt\.?|about|ca\.?|c\.|cir\.?|circa|bef\.?|before|aft\.?|after|est\.?|cal\.?)?\s*\d{3,4}(\s*[–—-]\s*(\d{3,4})?)?$/i;
+  var personAnchors = (root, start, stop) => {
+    const found = [];
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+    walker.currentNode = start;
+    let node = walker.nextNode();
+    while (node) {
+      const el = node;
+      const text = (el.innerText || "").trim();
+      const first = text.split("\n")[0]?.trim().toLocaleLowerCase() ?? "";
+      if (text.length < 80 && stop.includes(first)) {
+        break;
+      }
+      const href2 = el.getAttribute("href") || "";
+      if (el instanceof HTMLAnchorElement && /\/person\/\d+/.test(href2)) {
+        found.push(el);
+      }
+      node = walker.nextNode();
+    }
+    return found;
+  };
+  var cardLines = (el) => {
+    let node = el;
+    while (node.parentElement) {
+      const parent = node.parentElement;
+      const links = parent.querySelectorAll("a[href*='/person/']");
+      if (links.length !== 1 || (parent.innerText || "").length > 140) {
+        break;
+      }
+      node = parent;
+    }
+    return (node.innerText || "").split("\n").map((line) => line.trim()).filter(Boolean);
+  };
+  var pushName = (names, value) => {
+    const name = cleanRelativeName(value);
+    if (name && name.length < 80 && !names.includes(name)) {
+      names.push(name);
+    }
+  };
+  var namesAfter = (root, start, stop) => {
+    const names = [];
+    for (const anchor of personAnchors(root, start, stop)) {
+      pushName(names, anchor.textContent || "");
+    }
+    return names;
+  };
+  var splitHousehold = (root, start) => {
+    const anchors = personAnchors(root, start, []);
+    const spouses = [];
+    const children = [];
+    for (const anchor of anchors) {
+      const lines2 = cardLines(anchor);
+      const lifespan = lines2.slice(1).some((line) => LIFESPAN.test(line));
+      let nested = false;
+      let node = anchor.parentElement;
+      while (node && node !== root) {
+        const inside = anchors.filter((item) => node?.contains(item));
+        const firstLine = cleanRelativeName((node.innerText || "").split("\n")[0] || "");
+        const firstName = cleanRelativeName(inside[0]?.textContent || "");
+        if (inside.length > 1 && inside[0] !== anchor && firstLine && firstLine === firstName) {
+          nested = true;
+          break;
+        }
+        node = node.parentElement;
+      }
+      pushName(lifespan || nested ? children : spouses, anchor.textContent || "");
+    }
+    return { spouses, children };
+  };
+  var PARENT_LABELS = ["parents", "sz\xFCl\u0151k", "szulok", "eltern", "parents", "genitori", "padres"];
+  var HOUSEHOLD_LABELS = [
+    "spouse and children",
+    "spouses and children",
+    "spouse",
+    "h\xE1zast\xE1rs \xE9s gyerekek",
+    "h\xE1zast\xE1rsak \xE9s gyermekek",
+    "h\xE1zast\xE1rs \xE9s gyermekek",
+    "ehepartner und kinder",
+    "conjoint et enfants",
+    "coniuge e figli",
+    "c\xF3nyuge e hijos"
+  ];
+  var sectionLines = (heading, stop) => {
+    const lines2 = (heading.parentElement?.innerText || "").split("\n").map((line) => line.trim()).filter(Boolean);
+    const label2 = heading.innerText.trim().toLocaleLowerCase();
+    const start = lines2.findIndex((line) => line.toLocaleLowerCase() === label2);
+    const kept = [];
+    for (const line of lines2.slice(start + 1)) {
+      const key = line.toLocaleLowerCase();
+      if (stop.includes(key)) {
+        break;
+      }
+      if (/^(add|search)\b/i.test(line) || /hozzáad|hozzaad/i.test(line) || line.length > 60) {
+        continue;
+      }
+      kept.push(line);
+    }
+    return kept;
+  };
+  var linesAfter = (heading, stop) => {
+    const names = [];
+    for (const line of sectionLines(heading, stop)) {
+      if (LIFESPAN.test(line)) {
+        continue;
+      }
+      pushName(names, line);
+    }
+    return names;
+  };
+  var splitLines = (lines2) => {
+    const spouses = [];
+    const children = [];
+    for (let index = 0; index < lines2.length; index += 1) {
+      const line = lines2[index];
+      if (LIFESPAN.test(line)) {
+        continue;
+      }
+      const name = cleanRelativeName(line);
+      if (!name) {
+        continue;
+      }
+      const next = lines2[index + 1];
+      pushName(next && LIFESPAN.test(next) ? children : spouses, name);
+    }
+    return { spouses, children };
+  };
+  var readRelatives = () => {
+    const empty = {
+      parents: [],
+      spouses: [],
+      children: [],
+      parentsFound: false,
+      householdFound: false
+    };
+    const root = relationshipsRoot();
+    if (!root) {
+      return empty;
+    }
+    const parentsHeading = leafHeading(root, PARENT_LABELS);
+    const householdHeading = leafHeading(root, HOUSEHOLD_LABELS);
+    const parents = parentsHeading ? namesAfter(root, parentsHeading, HOUSEHOLD_LABELS) : [];
+    const linked = householdHeading ? splitHousehold(root, householdHeading) : { spouses: [], children: [] };
+    const fromLines = householdHeading && !linked.spouses.length && !linked.children.length ? splitLines(sectionLines(householdHeading, [])) : linked;
+    return {
+      parents: parents.length || !parentsHeading ? parents : linesAfter(parentsHeading, HOUSEHOLD_LABELS),
+      spouses: fromLines.spouses,
+      children: fromLines.children,
+      parentsFound: Boolean(parentsHeading),
+      householdFound: Boolean(householdHeading)
+    };
+  };
+  var namesFor = (tree, ids) => {
+    if (!ids) {
+      return [];
+    }
+    return ids.map((id) => personIn(tree, id)?.name || id);
+  };
   var dateSibling = (site, key) => {
     if (key.startsWith("birth")) return site.birthDate;
     if (key.startsWith("death")) return site.deathDate;
@@ -978,7 +1282,37 @@
       return;
     }
     const site = siteFacts();
+    const relatives = readRelatives();
     const diffs = diffPerson(site, person, writableOnAncestry);
+    const relativesKnown = Array.isArray(person.parentIds);
+    if (relativesKnown && relatives.parentsFound) {
+      const parentDiff = diffNameList(
+        "parents",
+        relatives.parents,
+        namesFor(tree, person.parentIds)
+      );
+      if (parentDiff) {
+        diffs.push(parentDiff);
+      }
+    }
+    if (relativesKnown && relatives.householdFound) {
+      const spouseDiff = diffNameList(
+        "spouses",
+        relatives.spouses,
+        namesFor(tree, person.spouseIds)
+      );
+      const childDiff = diffNameList(
+        "children",
+        relatives.children,
+        namesFor(tree, person.childIds)
+      );
+      if (spouseDiff) {
+        diffs.push(spouseDiff);
+      }
+      if (childDiff) {
+        diffs.push(childDiff);
+      }
+    }
     connectorLog("ancestry", "compare", {
       tree: tree.name,
       treeId: tree.sourceTreeId,
@@ -986,6 +1320,8 @@
       layout: site.layoutKnown,
       facts: Boolean(document.querySelector("#researchListFacts")),
       edit: Boolean(document.querySelector("#FactEditComponent")),
+      relatives,
+      relativesKnown,
       diffs: diffs.map((diff) => ({
         key: diff.key,
         site: diff.site,
@@ -998,6 +1334,7 @@
       detail: t("inTree", { tree: tree.name }),
       cachedAt,
       diffs,
+      relativesNote: !relativesKnown && (relatives.parentsFound || relatives.householdFound) ? t("relativesStale") : void 0,
       layoutKnown: site.layoutKnown,
       onWrite: (keys) => {
         void writeSelected(person, site, keys);

@@ -12,9 +12,14 @@ const TREEVIZ_URLS = [
 const status = document.querySelector("#status");
 const trees = document.querySelector("#trees");
 const openButton = document.querySelector("#open");
+const showButton = document.querySelector("#show");
+const note = document.querySelector("#note");
 
 if (openButton) {
 	openButton.textContent = t("openApp");
+}
+if (showButton) {
+	showButton.textContent = t("showPanel");
 }
 
 const sourceLabel = (tree: ConnectorTree): string => {
@@ -48,6 +53,26 @@ chrome.storage.local.get(INDEX_KEY, (items) => {
 		item.append(name, meta);
 		trees.append(item);
 	}
+});
+
+showButton?.addEventListener("click", () => {
+	void chrome.tabs.query({ active: true, currentWindow: true }).then(async (found) => {
+		const tabId = found[0]?.id;
+		if (tabId == null) {
+			if (note) note.textContent = t("panelMissing");
+			return;
+		}
+		try {
+			const response = (await chrome.tabs.sendMessage(tabId, {
+				type: "connector:show-panel",
+			})) as { ok?: boolean } | undefined;
+			if (note) {
+				note.textContent = response?.ok ? t("panelShown") : t("panelMissing");
+			}
+		} catch {
+			if (note) note.textContent = t("panelMissing");
+		}
+	});
 });
 
 openButton?.addEventListener("click", () => {

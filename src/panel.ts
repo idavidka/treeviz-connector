@@ -14,11 +14,23 @@ export type PanelModel = {
 	onWrite?: (keys: FieldKey[]) => void;
 	busy?: boolean;
 	status?: string;
+	relativesNote?: string;
 };
 
 const HOST_ID = "treeviz-connector-root";
+const HIDDEN_KEY = "treevizConnectorPanelHidden";
 
 let current: PanelModel = { heading: "" };
+let hidden = false;
+let ready = false;
+
+const persistHidden = (value: boolean): void => {
+	chrome.storage.session.set({ [HIDDEN_KEY]: value });
+};
+
+const removeHost = (): void => {
+	document.getElementById(HOST_ID)?.remove();
+};
 
 const label = (key: FieldKey): string => t(key);
 
@@ -43,7 +55,17 @@ const render = (host: HTMLElement, model: PanelModel): void => {
 			overflow: auto;
 			padding: 14px;
 		}
-		h2 { font-size: 15px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }
+		.head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+		h2 { font-size: 15px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+		button.hide {
+			height: 28px;
+			margin: 0;
+			flex: none;
+			background: #ffffff;
+			color: #344054;
+			border: 1px solid #e3e6ec;
+			box-shadow: none;
+		}
 		p { margin: 0 0 8px; color: #344054; }
 		.muted { color: #667085; font-size: 12px; }
 		.warn { color: #b54708; font-size: 12px; }
@@ -91,9 +113,21 @@ const render = (host: HTMLElement, model: PanelModel): void => {
 	`;
 	const card = document.createElement("div");
 	card.className = "card";
+	const head = document.createElement("div");
+	head.className = "head";
 	const title = document.createElement("h2");
 	title.textContent = model.heading || t("title");
-	card.append(title);
+	const hide = document.createElement("button");
+	hide.type = "button";
+	hide.className = "hide";
+	hide.textContent = t("hide");
+	hide.addEventListener("click", () => {
+		hidden = true;
+		persistHidden(true);
+		removeHost();
+	});
+	head.append(title, hide);
+	card.append(head);
 	if (model.detail) {
 		const p = document.createElement("p");
 		p.textContent = model.detail;
@@ -119,9 +153,14 @@ const render = (host: HTMLElement, model: PanelModel): void => {
 	}
 	const selected = new Set<FieldKey>();
 	if (model.diffs) {
-		if (model.diffs.length === 0) {
+		if (model.diffs.length === 0 && !model.relativesNote) {
 			const p = document.createElement("p");
 			p.textContent = t("noDiff");
+			card.append(p);
+		}
+		if (model.relativesNote) {
+			const p = document.createElement("p");
+			p.textContent = model.relativesNote;
 			card.append(p);
 		}
 		for (const diff of model.diffs) {
@@ -212,6 +251,12 @@ const render = (host: HTMLElement, model: PanelModel): void => {
 
 export const showPanel = (model: PanelModel): void => {
 	current = model;
+	if (!ready || hidden) {
+		if (hidden) {
+			removeHost();
+		}
+		return;
+	}
 	let host = document.getElementById(HOST_ID);
 	if (!host) {
 		host = document.createElement("div");
@@ -225,6 +270,28 @@ export const showPanel = (model: PanelModel): void => {
 	}
 	render(host, model);
 };
+
+chrome.storage.session.get(HIDDEN_KEY, (items) => {
+	hidden = Boolean(items[HIDDEN_KEY]);
+	ready = true;
+	if (current.heading || current.detail) {
+		showPanel(current);
+	}
+});
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+	const body = message as { type?: string };
+	if (body?.type !== "connector:show-panel") {
+		return;
+	}
+	hidden = false;
+	persistHidden(false);
+	const visible = Boolean(current.heading || current.detail);
+	if (visible) {
+		showPanel(current);
+	}
+	sendResponse({ ok: visible });
+});
 
 subscribeLog(() => {
 	const host = document.getElementById(HOST_ID);

@@ -5,7 +5,7 @@ import {
 	writeAncestryFacts,
 } from "../ancestry-writer.js";
 import type { SiteFacts } from "../compare.js";
-import { diffPerson } from "../compare.js";
+import { diffNameList, diffPerson } from "../compare.js";
 import { t } from "../i18n.js";
 import { connectorLog } from "../log.js";
 import { loadIndex, matchTrees, personIn, preferActive, ask } from "../match.js";
@@ -143,9 +143,246 @@ const writeSelected = async (
 	});
 };
 
-const siteValue = (site: SiteFacts, key: FieldKey): string | undefined => site[key];
-const treeValue = (person: ConnectorPerson, key: FieldKey): string | undefined =>
-	person[key as keyof ConnectorPerson] as string | undefined;
+const siteValue = (site: SiteFacts, key: FieldKey): string | undefined => {
+	const value = site[key as keyof SiteFacts];
+	return typeof value === "string" ? value : undefined;
+};
+const treeValue = (person: ConnectorPerson, key: FieldKey): string | undefined => {
+	const value = person[key as keyof ConnectorPerson];
+	return typeof value === "string" ? value : undefined;
+};
+
+const leafHeading = (root: ParentNode, labels: string[]): HTMLElement | undefined => {
+	let found: HTMLElement | undefined;
+	root.querySelectorAll("h1,h2,h3,h4,h5,div,span,p").forEach((node) => {
+		const el = node as HTMLElement;
+		const text = el.innerText?.trim() ?? "";
+		if (!labels.includes(text.toLocaleLowerCase()) || text.length > 40) {
+			return;
+		}
+		if (!found || el.innerText.length < found.innerText.length) {
+			found = el;
+		}
+	});
+	return found;
+};
+
+const relationshipsRoot = (): HTMLElement | undefined => {
+	const heading = leafHeading(document, [
+		"relationships",
+		"kapcsolatok",
+		"verwandtschaft",
+		"relations",
+		"relazioni",
+		"relaciones",
+	]);
+	let node = heading?.parentElement;
+	while (node && node !== document.body) {
+		const text = node.innerText?.toLocaleLowerCase() ?? "";
+		if (text.includes("parents") || text.includes("szülők") || text.includes("szulok")) {
+			return node;
+		}
+		node = node.parentElement;
+	}
+	return undefined;
+};
+
+const cleanRelativeName = (value: string): string =>
+	value
+		.split("\n")[0]
+		.trim()
+		.replace(/\s+\d{3,4}\s*[–-].*$/, "")
+		.replace(/\s*\(\d{3,4}[^)]*\)\s*$/, "")
+		.trim();
+
+const LIFESPAN =
+	/^(abt\.?|about|ca\.?|c\.|cir\.?|circa|bef\.?|before|aft\.?|after|est\.?|cal\.?)?\s*\d{3,4}(\s*[–—-]\s*(\d{3,4})?)?$/i;
+
+const personAnchors = (root: HTMLElement, start: HTMLElement, stop: string[]): HTMLAnchorElement[] => {
+	const found: HTMLAnchorElement[] = [];
+	const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+	walker.currentNode = start;
+	let node = walker.nextNode();
+	while (node) {
+		const el = node as HTMLElement;
+		const text = (el.innerText || "").trim();
+		const first = text.split("\n")[0]?.trim().toLocaleLowerCase() ?? "";
+		if (text.length < 80 && stop.includes(first)) {
+			break;
+		}
+		const href = el.getAttribute("href") || "";
+		if (el instanceof HTMLAnchorElement && /\/person\/\d+/.test(href)) {
+			found.push(el);
+		}
+		node = walker.nextNode();
+	}
+	return found;
+};
+
+const cardLines = (el: HTMLElement): string[] => {
+	let node = el;
+	while (node.parentElement) {
+		const parent = node.parentElement;
+		const links = parent.querySelectorAll("a[href*='/person/']");
+		if (links.length !== 1 || (parent.innerText || "").length > 140) {
+			break;
+		}
+		node = parent;
+	}
+	return (node.innerText || "")
+		.split("\n")
+		.map((line) => line.trim())
+		.filter(Boolean);
+};
+
+const pushName = (names: string[], value: string): void => {
+	const name = cleanRelativeName(value);
+	if (name && name.length < 80 && !names.includes(name)) {
+		names.push(name);
+	}
+};
+
+const namesAfter = (root: HTMLElement, start: HTMLElement, stop: string[]): string[] => {
+	const names: string[] = [];
+	for (const anchor of personAnchors(root, start, stop)) {
+		pushName(names, anchor.textContent || "");
+	}
+	return names;
+};
+
+const splitHousehold = (
+	root: HTMLElement,
+	start: HTMLElement
+): { spouses: string[]; children: string[] } => {
+	const anchors = personAnchors(root, start, []);
+	const spouses: string[] = [];
+	const children: string[] = [];
+	for (const anchor of anchors) {
+		const lines = cardLines(anchor);
+		const lifespan = lines.slice(1).some((line) => LIFESPAN.test(line));
+		let nested = false;
+		let node = anchor.parentElement;
+		while (node && node !== root) {
+			const inside = anchors.filter((item) => node?.contains(item));
+			const firstLine = cleanRelativeName((node.innerText || "").split("\n")[0] || "");
+			const firstName = cleanRelativeName(inside[0]?.textContent || "");
+			if (inside.length > 1 && inside[0] !== anchor && firstLine && firstLine === firstName) {
+				nested = true;
+				break;
+			}
+			node = node.parentElement;
+		}
+		pushName(lifespan || nested ? children : spouses, anchor.textContent || "");
+	}
+	return { spouses, children };
+};
+
+const PARENT_LABELS = ["parents", "szülők", "szulok", "eltern", "parents", "genitori", "padres"];
+const HOUSEHOLD_LABELS = [
+	"spouse and children",
+	"spouses and children",
+	"spouse",
+	"házastárs és gyerekek",
+	"házastársak és gyermekek",
+	"házastárs és gyermekek",
+	"ehepartner und kinder",
+	"conjoint et enfants",
+	"coniuge e figli",
+	"cónyuge e hijos",
+];
+
+const sectionLines = (heading: HTMLElement, stop: string[]): string[] => {
+	const lines = (heading.parentElement?.innerText || "")
+		.split("\n")
+		.map((line) => line.trim())
+		.filter(Boolean);
+	const label = heading.innerText.trim().toLocaleLowerCase();
+	const start = lines.findIndex((line) => line.toLocaleLowerCase() === label);
+	const kept: string[] = [];
+	for (const line of lines.slice(start + 1)) {
+		const key = line.toLocaleLowerCase();
+		if (stop.includes(key)) {
+			break;
+		}
+		if (/^(add|search)\b/i.test(line) || /hozzáad|hozzaad/i.test(line) || line.length > 60) {
+			continue;
+		}
+		kept.push(line);
+	}
+	return kept;
+};
+
+const linesAfter = (heading: HTMLElement, stop: string[]): string[] => {
+	const names: string[] = [];
+	for (const line of sectionLines(heading, stop)) {
+		if (LIFESPAN.test(line)) {
+			continue;
+		}
+		pushName(names, line);
+	}
+	return names;
+};
+
+const splitLines = (lines: string[]): { spouses: string[]; children: string[] } => {
+	const spouses: string[] = [];
+	const children: string[] = [];
+	for (let index = 0; index < lines.length; index += 1) {
+		const line = lines[index];
+		if (LIFESPAN.test(line)) {
+			continue;
+		}
+		const name = cleanRelativeName(line);
+		if (!name) {
+			continue;
+		}
+		const next = lines[index + 1];
+		pushName(next && LIFESPAN.test(next) ? children : spouses, name);
+	}
+	return { spouses, children };
+};
+
+const readRelatives = (): {
+	parents: string[];
+	spouses: string[];
+	children: string[];
+	parentsFound: boolean;
+	householdFound: boolean;
+} => {
+	const empty = {
+		parents: [],
+		spouses: [],
+		children: [],
+		parentsFound: false,
+		householdFound: false,
+	};
+	const root = relationshipsRoot();
+	if (!root) {
+		return empty;
+	}
+	const parentsHeading = leafHeading(root, PARENT_LABELS);
+	const householdHeading = leafHeading(root, HOUSEHOLD_LABELS);
+	const parents = parentsHeading ? namesAfter(root, parentsHeading, HOUSEHOLD_LABELS) : [];
+	const linked = householdHeading ? splitHousehold(root, householdHeading) : { spouses: [], children: [] };
+	const fromLines =
+		householdHeading && !linked.spouses.length && !linked.children.length
+			? splitLines(sectionLines(householdHeading, []))
+			: linked;
+	return {
+		parents:
+			parents.length || !parentsHeading ? parents : linesAfter(parentsHeading, HOUSEHOLD_LABELS),
+		spouses: fromLines.spouses,
+		children: fromLines.children,
+		parentsFound: Boolean(parentsHeading),
+		householdFound: Boolean(householdHeading),
+	};
+};
+
+const namesFor = (tree: ConnectorTree, ids?: string[]): string[] => {
+	if (!ids) {
+		return [];
+	}
+	return ids.map((id) => personIn(tree, id)?.name || id);
+};
 
 const dateSibling = (site: SiteFacts, key: FieldKey): string | undefined => {
 	if (key.startsWith("birth")) return site.birthDate;
@@ -175,7 +412,37 @@ const showTree = (tree: ConnectorTree, personId: string, cachedAt?: number): voi
 		return;
 	}
 	const site = siteFacts();
+	const relatives = readRelatives();
 	const diffs = diffPerson(site, person, writableOnAncestry);
+	const relativesKnown = Array.isArray(person.parentIds);
+	if (relativesKnown && relatives.parentsFound) {
+		const parentDiff = diffNameList(
+			"parents",
+			relatives.parents,
+			namesFor(tree, person.parentIds)
+		);
+		if (parentDiff) {
+			diffs.push(parentDiff);
+		}
+	}
+	if (relativesKnown && relatives.householdFound) {
+		const spouseDiff = diffNameList(
+			"spouses",
+			relatives.spouses,
+			namesFor(tree, person.spouseIds)
+		);
+		const childDiff = diffNameList(
+			"children",
+			relatives.children,
+			namesFor(tree, person.childIds)
+		);
+		if (spouseDiff) {
+			diffs.push(spouseDiff);
+		}
+		if (childDiff) {
+			diffs.push(childDiff);
+		}
+	}
 	connectorLog("ancestry", "compare", {
 		tree: tree.name,
 		treeId: tree.sourceTreeId,
@@ -183,6 +450,8 @@ const showTree = (tree: ConnectorTree, personId: string, cachedAt?: number): voi
 		layout: site.layoutKnown,
 		facts: Boolean(document.querySelector("#researchListFacts")),
 		edit: Boolean(document.querySelector("#FactEditComponent")),
+		relatives,
+		relativesKnown,
 		diffs: diffs.map((diff) => ({
 			key: diff.key,
 			site: diff.site,
@@ -195,6 +464,10 @@ const showTree = (tree: ConnectorTree, personId: string, cachedAt?: number): voi
 		detail: t("inTree", { tree: tree.name }),
 		cachedAt,
 		diffs,
+		relativesNote:
+			!relativesKnown && (relatives.parentsFound || relatives.householdFound)
+				? t("relativesStale")
+				: undefined,
 		layoutKnown: site.layoutKnown,
 		onWrite: (keys) => {
 			void writeSelected(person, site, keys);

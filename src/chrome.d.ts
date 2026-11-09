@@ -62,7 +62,11 @@ interface ChromeNamespace {
 			tabId: number,
 			props: { url?: string; active?: boolean }
 		) => Promise<ChromeTab>;
-		query: (query: { url?: string | string[] }) => Promise<ChromeTab[]>;
+		query: (query: {
+			url?: string | string[];
+			active?: boolean;
+			currentWindow?: boolean;
+		}) => Promise<ChromeTab[]>;
 		sendMessage: (tabId: number, message: unknown) => Promise<unknown>;
 	};
 	scripting: ChromeScripting;

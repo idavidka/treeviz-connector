@@ -80,6 +80,7 @@ main {
 	font-size: 12px;
 }
 
+#show,
 #open {
 	display: flex;
 	align-items: center;
@@ -98,11 +99,33 @@ main {
 	box-shadow: 0 8px 24px rgba(99, 102, 241, 0.28);
 }
 
+#show {
+	background: #ffffff;
+	color: #344054;
+	border: 1px solid #e3e6ec;
+	box-shadow: none;
+}
+
+#show:hover {
+	background: #f8fafc;
+}
+
 #open:hover {
 	background: #4f46e5;
 }
 
+#show:focus-visible,
 #open:focus-visible {
 	outline: 2px solid #818cf8;
 	outline-offset: 2px;
+}
+
+#note {
+	margin: 8px 0 0;
+	color: #667085;
+	font-size: 12px;
+}
+
+#note:empty {
+	display: none;
 }

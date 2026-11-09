@@ -248,9 +248,17 @@
     deathPlace: "Hal\xE1l helye",
     marriageDate: "H\xE1zass\xE1g d\xE1tuma",
     marriagePlace: "H\xE1zass\xE1g helye",
+    parents: "Sz\xFCl\u0151k",
+    spouses: "H\xE1zast\xE1rsak",
+    children: "Gyerekek",
+    relativesStale: "A TreeViz-adatban m\xE9g nincsenek rokonok. Friss\xEDtsd a TreeViz lapot, hogy \xFAjra elk\xFCldje a f\xE1t.",
     missingFact: "A t\xE9ny nem tal\xE1lhat\xF3 az oldalon.",
     batchDone: "Az Ancestry-friss\xEDt\xE9s k\xE9sz.",
     openApp: "TreeViz megnyit\xE1sa",
+    hide: "Elrejt\xE9s",
+    showPanel: "Panel megjelen\xEDt\xE9se",
+    panelShown: "A panel \xFAjra l\xE1tszik ezen a lapon.",
+    panelMissing: "Ezen a lapon nincs TreeViz Connector panel.",
     persons: "{{count}} szem\xE9ly",
     log: "Napl\xF3",
     copyLog: "Napl\xF3 m\xE1sol\xE1sa",
@@ -284,9 +292,17 @@
     deathPlace: "Death place",
     marriageDate: "Marriage date",
     marriagePlace: "Marriage place",
+    parents: "Parents",
+    spouses: "Spouses",
+    children: "Children",
+    relativesStale: "This TreeViz data has no relatives yet. Refresh the TreeViz tab so it sends the tree again.",
     missingFact: "The fact is not on this page.",
     batchDone: "The Ancestry update is finished.",
     openApp: "Open TreeViz",
+    hide: "Hide",
+    showPanel: "Show the panel",
+    panelShown: "The panel is visible on this page again.",
+    panelMissing: "This page has no TreeViz Connector panel.",
     persons: "{{count}} people",
     log: "Log",
     copyLog: "Copy log",
@@ -426,7 +442,16 @@
 
   // extensions/treeviz-connector/src/panel.ts
   var HOST_ID = "treeviz-connector-root";
+  var HIDDEN_KEY = "treevizConnectorPanelHidden";
   var current = { heading: "" };
+  var hidden = false;
+  var ready = false;
+  var persistHidden = (value) => {
+    chrome.storage.session.set({ [HIDDEN_KEY]: value });
+  };
+  var removeHost = () => {
+    document.getElementById(HOST_ID)?.remove();
+  };
   var label = (key) => t(key);
   var render = (host, model) => {
     const root = host.shadowRoot;
@@ -449,7 +474,17 @@
 			overflow: auto;
 			padding: 14px;
 		}
-		h2 { font-size: 15px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }
+		.head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+		h2 { font-size: 15px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+		button.hide {
+			height: 28px;
+			margin: 0;
+			flex: none;
+			background: #ffffff;
+			color: #344054;
+			border: 1px solid #e3e6ec;
+			box-shadow: none;
+		}
 		p { margin: 0 0 8px; color: #344054; }
 		.muted { color: #667085; font-size: 12px; }
 		.warn { color: #b54708; font-size: 12px; }
@@ -497,9 +532,21 @@
 	`;
     const card = document.createElement("div");
     card.className = "card";
+    const head = document.createElement("div");
+    head.className = "head";
     const title = document.createElement("h2");
     title.textContent = model.heading || t("title");
-    card.append(title);
+    const hide = document.createElement("button");
+    hide.type = "button";
+    hide.className = "hide";
+    hide.textContent = t("hide");
+    hide.addEventListener("click", () => {
+      hidden = true;
+      persistHidden(true);
+      removeHost();
+    });
+    head.append(title, hide);
+    card.append(head);
     if (model.detail) {
       const p = document.createElement("p");
       p.textContent = model.detail;
@@ -525,9 +572,14 @@
     }
     const selected = /* @__PURE__ */ new Set();
     if (model.diffs) {
-      if (model.diffs.length === 0) {
+      if (model.diffs.length === 0 && !model.relativesNote) {
         const p = document.createElement("p");
         p.textContent = t("noDiff");
+        card.append(p);
+      }
+      if (model.relativesNote) {
+        const p = document.createElement("p");
+        p.textContent = model.relativesNote;
         card.append(p);
       }
       for (const diff of model.diffs) {
@@ -617,6 +669,12 @@
   };
   var showPanel = (model) => {
     current = model;
+    if (!ready || hidden) {
+      if (hidden) {
+        removeHost();
+      }
+      return;
+    }
     let host = document.getElementById(HOST_ID);
     if (!host) {
       host = document.createElement("div");
@@ -630,6 +688,26 @@
     }
     render(host, model);
   };
+  chrome.storage.session.get(HIDDEN_KEY, (items) => {
+    hidden = Boolean(items[HIDDEN_KEY]);
+    ready = true;
+    if (current.heading || current.detail) {
+      showPanel(current);
+    }
+  });
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    const body = message;
+    if (body?.type !== "connector:show-panel") {
+      return;
+    }
+    hidden = false;
+    persistHidden(false);
+    const visible = Boolean(current.heading || current.detail);
+    if (visible) {
+      showPanel(current);
+    }
+    sendResponse({ ok: visible });
+  });
   subscribeLog(() => {
     const host = document.getElementById(HOST_ID);
     const pre = host?.shadowRoot?.querySelector("pre[data-connector-log]");

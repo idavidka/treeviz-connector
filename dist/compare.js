@@ -86,6 +86,36 @@ const MONTHS = {
     dezembro: 12,
 };
 export const collapse = (value) => (value ?? "").replace(/\s+/g, " ").trim();
+export const foldName = (value) => collapse(value)
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+export const sameName = (left, right) => {
+    const a = foldName(left);
+    const b = foldName(right);
+    if (!a || !b) {
+        return false;
+    }
+    if (a === b) {
+        return true;
+    }
+    return a.split(" ").sort().join(" ") === b.split(" ").sort().join(" ");
+};
+export const diffNameList = (key, siteNames, treeNames) => {
+    const unmatchedSite = siteNames.filter((siteName) => !treeNames.some((treeName) => sameName(siteName, treeName)));
+    const unmatchedTree = treeNames.filter((treeName) => !siteNames.some((siteName) => sameName(siteName, treeName)));
+    if (!unmatchedSite.length && !unmatchedTree.length) {
+        return undefined;
+    }
+    return {
+        key,
+        site: siteNames.join(", ") || undefined,
+        treeviz: treeNames.join(", ") || undefined,
+        writable: false,
+    };
+};
 export const sameText = (left, right) => collapse(left).toLocaleLowerCase() === collapse(right).toLocaleLowerCase();
 export const parseLooseDate = (value) => {
     const text = collapse(value);

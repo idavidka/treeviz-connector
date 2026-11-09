@@ -57,7 +57,19 @@ const trimPerson = (person) => {
         marriageDate: person.marriageDate,
         marriagePlace: person.marriagePlace,
         sourceUrl: person.sourceUrl,
+        parentIds: idList(person.parentIds),
+        spouseIds: idList(person.spouseIds),
+        childIds: idList(person.childIds),
     };
+};
+const idList = (value) => {
+    if (!Array.isArray(value)) {
+        return undefined;
+    }
+    const ids = value
+        .map((item) => String(item).replace(/[^\d]/g, ""))
+        .filter(Boolean);
+    return ids;
 };
 const trimTree = (tree) => {
     if (!tree || (tree.source !== "ancestry" && tree.source !== "myheritage")) {
