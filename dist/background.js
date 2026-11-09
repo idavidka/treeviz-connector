@@ -355,12 +355,18 @@ const onMessage = (message, sender, sendResponse) => {
     if (type === "connector:get-site") {
         void storageGet(chrome.storage.local, SITE_KEY).then((value) => {
             const current = snapshotMap(value);
+            const source = body.source === "myheritage" ? "myheritage" : "ancestry";
+            const personId = digits(body.sourcePersonId);
             const key = snapshotKey({
-                source: body.source === "myheritage" ? "myheritage" : "ancestry",
+                source,
                 sourceTreeId: String(body.sourceTreeId ?? ""),
-                sourcePersonId: digits(body.sourcePersonId),
+                sourcePersonId: personId,
             });
-            sendResponse({ ok: true, snapshot: current[key] });
+            const samePerson = Object.values(current).filter((item) => item.source === source && item.sourcePersonId === personId);
+            sendResponse({
+                ok: true,
+                snapshot: current[key] || (samePerson.length === 1 ? samePerson[0] : undefined),
+            });
         });
         return true;
     }

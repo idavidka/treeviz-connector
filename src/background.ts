@@ -159,7 +159,8 @@ const acceptIndex = (message: Record<string, unknown>): ConnectorIndex => {
 	};
 };
 
-const digits = (value: unknown): string => String(value ?? "").replace(/[^\d]/g, "");
+const digits = (value: unknown): string =>
+	String(value ?? "").replace(/[^\d]/g, "");
 
 const FIELD_KEYS = new Set<FieldKey>([
 	"name",
@@ -176,7 +177,9 @@ const FIELD_KEYS = new Set<FieldKey>([
 	"fact",
 ]);
 
-const snapshotKey = (snapshot: Pick<SiteSnapshot, "source" | "sourceTreeId" | "sourcePersonId">): string =>
+const snapshotKey = (
+	snapshot: Pick<SiteSnapshot, "source" | "sourceTreeId" | "sourcePersonId">
+): string =>
 	`${snapshot.source}:${snapshot.sourceTreeId.toLowerCase()}:${snapshot.sourcePersonId}`;
 
 const snapshotMap = (value: unknown): Record<string, SiteSnapshot> => {
@@ -184,7 +187,9 @@ const snapshotMap = (value: unknown): Record<string, SiteSnapshot> => {
 		return {};
 	}
 	const map: Record<string, SiteSnapshot> = {};
-	for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+	for (const [key, item] of Object.entries(
+		value as Record<string, unknown>
+	)) {
 		const snapshot = acceptSnapshot(item);
 		if (snapshot) {
 			map[key] = snapshot;
@@ -228,7 +233,9 @@ const acceptSnapshot = (value: unknown): SiteSnapshot | undefined => {
 	};
 };
 
-const acceptBatch = (message: Record<string, unknown>): AncestryBatch | undefined => {
+const acceptBatch = (
+	message: Record<string, unknown>
+): AncestryBatch | undefined => {
 	if (!Array.isArray(message.people)) {
 		return undefined;
 	}
@@ -247,7 +254,11 @@ const acceptBatch = (message: Record<string, unknown>): AncestryBatch | undefine
 			treeId,
 			personId,
 			facts: person.facts.filter(
-				(fact) => fact && typeof fact.type === "string" && fact.from && fact.to
+				(fact) =>
+					fact &&
+					typeof fact.type === "string" &&
+					fact.from &&
+					fact.to
 			),
 		});
 	}
@@ -291,9 +302,9 @@ const openBatchPerson = async (batch: AncestryBatch): Promise<void> => {
 	);
 	if (tabId != null) {
 		window.setTimeout(() => {
-			chrome.tabs.sendMessage(tabId as number, { type: "connector:run-batch" }).catch(
-				() => undefined
-			);
+			chrome.tabs
+				.sendMessage(tabId as number, { type: "connector:run-batch" })
+				.catch(() => undefined);
 		}, 1500);
 	}
 };
@@ -331,7 +342,9 @@ const onMessage = (
 	}
 
 	if (type === "treeviz:ping") {
-		void appendLog(`${new Date().toISOString()} [background] ping from TreeViz`);
+		void appendLog(
+			`${new Date().toISOString()} [background] ping from TreeViz`
+		);
 		sendResponse({ ok: true });
 		return false;
 	}
@@ -345,13 +358,18 @@ const onMessage = (
 
 	if (type === "treeviz:index") {
 		const index = acceptIndex(body);
-		const people = index.trees.reduce((sum, tree) => sum + tree.persons.length, 0);
-		void storageSet(chrome.storage.local, { [INDEX_KEY]: index }).then(() => {
-			void appendLog(
-				`${new Date().toISOString()} [background] index uid=${index.uid} trees=${index.trees.map((tree) => `${tree.source}:${tree.sourceTreeId}:${tree.persons.length}`).join(",")} truncated=${index.truncated}`
-			);
-			sendResponse({ ok: true, people });
-		});
+		const people = index.trees.reduce(
+			(sum, tree) => sum + tree.persons.length,
+			0
+		);
+		void storageSet(chrome.storage.local, { [INDEX_KEY]: index }).then(
+			() => {
+				void appendLog(
+					`${new Date().toISOString()} [background] index uid=${index.uid} trees=${index.trees.map((tree) => `${tree.source}:${tree.sourceTreeId}:${tree.persons.length}`).join(",")} truncated=${index.truncated}`
+				);
+				sendResponse({ ok: true, people });
+			}
+		);
 		return true;
 	}
 
@@ -386,7 +404,10 @@ const onMessage = (
 						continue;
 					}
 					try {
-						const response = await chrome.tabs.sendMessage(tab.id, body);
+						const response = await chrome.tabs.sendMessage(
+							tab.id,
+							body
+						);
 						const result = response as { ok?: boolean } | undefined;
 						if (result?.ok) {
 							sendResponse(result);
@@ -426,12 +447,24 @@ const onMessage = (
 	if (type === "connector:get-site") {
 		void storageGet(chrome.storage.local, SITE_KEY).then((value) => {
 			const current = snapshotMap(value);
+			const source =
+				body.source === "myheritage" ? "myheritage" : "ancestry";
+			const personId = digits(body.sourcePersonId);
 			const key = snapshotKey({
-				source: body.source === "myheritage" ? "myheritage" : "ancestry",
+				source,
 				sourceTreeId: String(body.sourceTreeId ?? ""),
-				sourcePersonId: digits(body.sourcePersonId),
+				sourcePersonId: personId,
 			});
-			sendResponse({ ok: true, snapshot: current[key] });
+			const samePerson = Object.values(current).filter(
+				(item) =>
+					item.source === source && item.sourcePersonId === personId
+			);
+			sendResponse({
+				ok: true,
+				snapshot:
+					current[key] ||
+					(samePerson.length === 1 ? samePerson[0] : undefined),
+			});
 		});
 		return true;
 	}
@@ -462,23 +495,31 @@ const onMessage = (
 	}
 
 	if (type === "connector:batch-advance") {
-		void storageGet(chrome.storage.session, BATCH_KEY).then(async (value) => {
-			const batch = value as AncestryBatch | undefined;
-			if (!batch) {
-				sendResponse({ ok: false });
-				return;
+		void storageGet(chrome.storage.session, BATCH_KEY).then(
+			async (value) => {
+				const batch = value as AncestryBatch | undefined;
+				if (!batch) {
+					sendResponse({ ok: false });
+					return;
+				}
+				const extra = Array.isArray(body.errors)
+					? body.errors.map(String)
+					: [];
+				batch.errors.push(...extra);
+				batch.cursor += 1;
+				if (batch.cursor >= batch.people.length) {
+					await storageRemove(chrome.storage.session, BATCH_KEY);
+					sendResponse({
+						ok: true,
+						done: true,
+						errors: batch.errors,
+					});
+					return;
+				}
+				await openBatchPerson(batch);
+				sendResponse({ ok: true, done: false });
 			}
-			const extra = Array.isArray(body.errors) ? body.errors.map(String) : [];
-			batch.errors.push(...extra);
-			batch.cursor += 1;
-			if (batch.cursor >= batch.people.length) {
-				await storageRemove(chrome.storage.session, BATCH_KEY);
-				sendResponse({ ok: true, done: true, errors: batch.errors });
-				return;
-			}
-			await openBatchPerson(batch);
-			sendResponse({ ok: true, done: false });
-		});
+		);
 		return true;
 	}
 
