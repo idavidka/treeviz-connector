@@ -9,6 +9,7 @@ import { diffPerson, foldName, sameName } from "../compare.js";
 import { t } from "../i18n.js";
 import { connectorLog } from "../log.js";
 import { loadIndex, matchTrees, personIn, preferActive, ask } from "../match.js";
+import { readLooseFacts } from "../page-facts.js";
 import { parseAncestryLocation } from "../parse-url.js";
 import { showPanel, patchPanel } from "../panel.js";
 import type {
@@ -538,81 +539,7 @@ const readRelatives = (): {
 	};
 };
 
-const SKIP_FACT_TITLES = new Set([
-	"name",
-	"név",
-	"nev",
-	"gender",
-	"sex",
-	"nem",
-	"birth",
-	"születés",
-	"szuletes",
-	"death",
-	"halál",
-	"halal",
-	"marriage",
-	"házasság",
-	"hazassag",
-	"parents",
-	"szülők",
-	"spouse and children",
-	"relationships",
-	"timeline",
-	"sources",
-	"facts",
-	"possible birth records",
-	"add fact",
-	"add source",
-	"add web link",
-	"add family",
-	"search on ancestry",
-]);
-
-const readPageFacts = (): ConnectorFact[] => {
-	const facts: ConnectorFact[] = [];
-	const seen = new Set<string>();
-	const relationships = relationshipsRoot();
-	document.querySelectorAll("div, li, article, section").forEach((node) => {
-		const el = node as HTMLElement;
-		if (el.closest("#treeviz-connector-root") || (relationships && relationships.contains(el))) {
-			return;
-		}
-		const text = el.innerText?.trim() ?? "";
-		if (!text || text.length > 140 || !text.includes("\n")) {
-			return;
-		}
-		if (Array.from(el.children).some((child) => (child as HTMLElement).innerText?.trim() === text)) {
-			return;
-		}
-		const lines = text
-			.split("\n")
-			.map((line) => line.trim())
-			.filter((line) => line && !/^edit$/i.test(line));
-		if (lines.length < 2 || lines.length > 4) {
-			return;
-		}
-		const title = lines[0].replace(/\s+edit$/i, "").trim();
-		const key = title.toLocaleLowerCase();
-		if (!title || title.length > 40 || SKIP_FACT_TITLES.has(key)) {
-			return;
-		}
-		if (/\bof\s+(?:a\s+|an\s+|the\s+)?(?:son|daughter|child|father|mother|husband|wife|spouse|parent)\b/i.test(title)) {
-			return;
-		}
-		const value = lines.slice(1).join(", ").trim();
-		if (!value || value.length > 100) {
-			return;
-		}
-		const id = `${foldName(title)}|${foldName(value)}`;
-		if (seen.has(id)) {
-			return;
-		}
-		seen.add(id);
-		facts.push({ title, value });
-	});
-	return facts;
-};
+const readPageFacts = (): ConnectorFact[] => readLooseFacts(document, relationshipsRoot());
 
 const factDiffs = (siteFacts: ConnectorFact[], treeFacts: ConnectorFact[]): FieldDiff[] => {
 	const titles = new Map<string, string>();

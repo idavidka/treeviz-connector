@@ -671,6 +671,94 @@
     return trees.find((tree) => tree.active);
   };
 
+  // extensions/treeviz-connector/src/page-facts.ts
+  var SKIP_TITLES = /* @__PURE__ */ new Set([
+    "name",
+    "nev",
+    "gender",
+    "sex",
+    "nem",
+    "birth",
+    "death",
+    "marriage",
+    "parents",
+    "spouse and children",
+    "relationships",
+    "timeline",
+    "sources",
+    "facts",
+    "filter",
+    "add",
+    "filteradd",
+    "select fact",
+    "selectfact",
+    "edit",
+    "search",
+    "more",
+    "life story",
+    "gallery",
+    "hints",
+    "media",
+    "story"
+  ]);
+  var LIFE_HEADER = /^(birth|szuletes|death|halal|marriage|hazassag|baptism|burial|christening|gender|sex|name|nev|nem)\b/;
+  var chromeLine = (line) => {
+    const key = foldName(line);
+    const squashed = key.replace(/\s+/g, "");
+    return SKIP_TITLES.has(key) || SKIP_TITLES.has(squashed);
+  };
+  var factText = (el) => {
+    const clone = el.cloneNode(true);
+    clone.querySelectorAll(
+      "button, select, option, label, nav, script, style, [role='button'], [role='tab'], [role='tablist'], [role='combobox'], [role='menu'], [role='toolbar']"
+    ).forEach((node) => node.remove());
+    return clone.innerText?.trim() ?? "";
+  };
+  var readLooseFacts = (doc, skipWithin) => {
+    const facts = [];
+    const seen = /* @__PURE__ */ new Set();
+    doc.querySelectorAll("div, li, article, section").forEach((node) => {
+      const el = node;
+      if (el.closest("#treeviz-connector-root") || skipWithin && skipWithin.contains(el)) {
+        return;
+      }
+      const text = factText(el);
+      if (!text || text.length > 140 || !text.includes("\n")) {
+        return;
+      }
+      if (Array.from(el.children).some((child) => factText(child) === text)) {
+        return;
+      }
+      const lines2 = text.split("\n").map((line) => line.trim()).filter((line) => line && !chromeLine(line));
+      if (lines2.length < 2 || lines2.length > 4) {
+        return;
+      }
+      const title = lines2[0].replace(/\s+edit$/i, "").trim();
+      if (!title || title.length > 40 || chromeLine(title) || LIFE_HEADER.test(foldName(title))) {
+        return;
+      }
+      if (/\bof\s+(?:a\s+|an\s+|the\s+)?(?:son|daughter|child|father|mother|husband|wife|spouse|parent)\b/i.test(
+        title
+      )) {
+        return;
+      }
+      if (lines2.slice(1).some((line) => LIFE_HEADER.test(foldName(line)) || chromeLine(line))) {
+        return;
+      }
+      const value = lines2.slice(1).join(", ").trim();
+      if (!value || value.length > 100) {
+        return;
+      }
+      const id = `${foldName(title)}|${foldName(value)}`;
+      if (seen.has(id)) {
+        return;
+      }
+      seen.add(id);
+      facts.push({ title, value });
+    });
+    return facts;
+  };
+
   // extensions/treeviz-connector/src/parse-url.ts
   var ANCESTRY_PERSON = /\/family-tree\/person\/tree\/(\d+)\/person\/(\d+)/;
   var ANCESTRY_TREE = /\/family-tree\/tree\/(\d+)/;
@@ -1431,77 +1519,7 @@
       householdFound: Boolean(householdHeading)
     };
   };
-  var SKIP_FACT_TITLES = /* @__PURE__ */ new Set([
-    "name",
-    "n\xE9v",
-    "nev",
-    "gender",
-    "sex",
-    "nem",
-    "birth",
-    "sz\xFClet\xE9s",
-    "szuletes",
-    "death",
-    "hal\xE1l",
-    "halal",
-    "marriage",
-    "h\xE1zass\xE1g",
-    "hazassag",
-    "parents",
-    "sz\xFCl\u0151k",
-    "spouse and children",
-    "relationships",
-    "timeline",
-    "sources",
-    "facts",
-    "possible birth records",
-    "add fact",
-    "add source",
-    "add web link",
-    "add family",
-    "search on ancestry"
-  ]);
-  var readPageFacts = () => {
-    const facts = [];
-    const seen = /* @__PURE__ */ new Set();
-    const relationships = relationshipsRoot();
-    document.querySelectorAll("div, li, article, section").forEach((node) => {
-      const el = node;
-      if (el.closest("#treeviz-connector-root") || relationships && relationships.contains(el)) {
-        return;
-      }
-      const text = el.innerText?.trim() ?? "";
-      if (!text || text.length > 140 || !text.includes("\n")) {
-        return;
-      }
-      if (Array.from(el.children).some((child) => child.innerText?.trim() === text)) {
-        return;
-      }
-      const lines2 = text.split("\n").map((line) => line.trim()).filter((line) => line && !/^edit$/i.test(line));
-      if (lines2.length < 2 || lines2.length > 4) {
-        return;
-      }
-      const title = lines2[0].replace(/\s+edit$/i, "").trim();
-      const key = title.toLocaleLowerCase();
-      if (!title || title.length > 40 || SKIP_FACT_TITLES.has(key)) {
-        return;
-      }
-      if (/\bof\s+(?:a\s+|an\s+|the\s+)?(?:son|daughter|child|father|mother|husband|wife|spouse|parent)\b/i.test(title)) {
-        return;
-      }
-      const value = lines2.slice(1).join(", ").trim();
-      if (!value || value.length > 100) {
-        return;
-      }
-      const id = `${foldName(title)}|${foldName(value)}`;
-      if (seen.has(id)) {
-        return;
-      }
-      seen.add(id);
-      facts.push({ title, value });
-    });
-    return facts;
-  };
+  var readPageFacts = () => readLooseFacts(document, relationshipsRoot());
   var factDiffs = (siteFacts2, treeFacts) => {
     const titles = /* @__PURE__ */ new Map();
     for (const fact of [...siteFacts2, ...treeFacts]) {
