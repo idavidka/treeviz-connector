@@ -1,0 +1,117 @@
+{
+	"manifest_version": 3,
+	"name": "TreeViz Connector",
+	"version": "0.1.0",
+	"description": "TreeViz Connector compares the person open on Ancestry or MyHeritage with your TreeViz tree, and writes the TreeViz values you confirm.",
+	"key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuiIjprPf+2sF8WCzO+F6rF3poIoi7bjlR7r6YbZIO73y83zuYlZDowZmD4iqXLXyZ86FA1SnjTPIJvkepfNT1eY314IXII5x+0H+u2EZB6796efc2gJCAao4J55qfJjFWSQ6Iw8Z9nY/NmIT+AF2EWRG99Vqd1RZdzfAhB67cpdM4uHY4F9zjCfEZelAjkrgMnfbnvWa4TnVNs0mMhgwI41j+8nTtvc1WdyDXode7mfho364DKezRKg/KuJKRbxzz7Ni/duLI8NmJhUAFPuqW/JPJ/LH79F4ENC8fOsG1tewXpPemy/ixmPzOoH53PPzToAowK+7PzxMLwYBBN4EIQIDAQAB",
+	"icons": {
+		"16": "icons/icon-16.png",
+		"32": "icons/icon-32.png",
+		"48": "icons/icon-48.png",
+		"128": "icons/icon-128.png"
+	},
+	"action": {
+		"default_title": "TreeViz Connector",
+		"default_popup": "popup.html",
+		"default_icon": {
+			"16": "icons/icon-16.png",
+			"32": "icons/icon-32.png"
+		}
+	},
+	"background": {
+		"service_worker": "dist/background.js",
+		"type": "module"
+	},
+	"permissions": ["storage", "scripting", "tabs"],
+	"host_permissions": [
+		"https://www.ancestry.com/*",
+		"https://www.ancestry.co.uk/*",
+		"https://www.ancestry.ca/*",
+		"https://www.ancestry.com.au/*",
+		"https://www.ancestry.de/*",
+		"https://www.ancestry.fr/*",
+		"https://www.ancestry.it/*",
+		"https://www.ancestry.se/*",
+		"https://www.ancestry.mx/*",
+		"https://www.myheritage.com/*",
+		"https://www.myheritage.hu/*",
+		"https://www.myheritage.de/*",
+		"https://www.myheritage.fr/*",
+		"https://www.myheritage.es/*",
+		"https://www.myheritage.it/*",
+		"https://www.myheritage.pl/*",
+		"https://www.myheritage.nl/*",
+		"https://www.myheritage.dk/*",
+		"https://www.myheritage.se/*",
+		"https://www.myheritage.no/*",
+		"https://www.myheritage.fi/*",
+		"https://www.myheritage.pt/*",
+		"https://treeviz.com/*",
+		"https://www.treeviz.com/*",
+		"https://dev.treeviz.com/*",
+		"https://qa.treeviz.com/*",
+		"http://localhost/*"
+	],
+	"externally_connectable": {
+		"matches": [
+			"https://treeviz.com/*",
+			"https://www.treeviz.com/*",
+			"https://dev.treeviz.com/*",
+			"https://qa.treeviz.com/*",
+			"http://localhost/*"
+		]
+	},
+	"content_security_policy": {
+		"extension_pages": "default-src 'self'"
+	},
+	"content_scripts": [
+		{
+			"matches": [
+				"https://www.ancestry.com/*",
+				"https://www.ancestry.co.uk/*",
+				"https://www.ancestry.ca/*",
+				"https://www.ancestry.com.au/*",
+				"https://www.ancestry.de/*",
+				"https://www.ancestry.fr/*",
+				"https://www.ancestry.it/*",
+				"https://www.ancestry.se/*",
+				"https://www.ancestry.mx/*"
+			],
+			"js": ["dist/content/ancestry.js"],
+			"type": "module",
+			"run_at": "document_idle"
+		},
+		{
+			"matches": [
+				"https://www.myheritage.com/*",
+				"https://www.myheritage.hu/*",
+				"https://www.myheritage.de/*",
+				"https://www.myheritage.fr/*",
+				"https://www.myheritage.es/*",
+				"https://www.myheritage.it/*",
+				"https://www.myheritage.pl/*",
+				"https://www.myheritage.nl/*",
+				"https://www.myheritage.dk/*",
+				"https://www.myheritage.se/*",
+				"https://www.myheritage.no/*",
+				"https://www.myheritage.fi/*",
+				"https://www.myheritage.pt/*"
+			],
+			"js": ["dist/content/myheritage.js"],
+			"type": "module",
+			"run_at": "document_idle"
+		},
+		{
+			"matches": [
+				"https://treeviz.com/*",
+				"https://www.treeviz.com/*",
+				"https://dev.treeviz.com/*",
+				"https://qa.treeviz.com/*",
+				"http://localhost/*"
+			],
+			"js": ["dist/content/treeviz.js"],
+			"type": "module",
+			"run_at": "document_idle"
+		}
+	]
+}
