@@ -701,6 +701,17 @@ const showTree = (tree: ConnectorTree, personId: string, cachedAt?: number): voi
 			diffs.push(childDiff);
 		}
 	}
+	void ask({
+		type: "connector:save-site",
+		snapshot: {
+			source: "ancestry",
+			sourceTreeId: tree.sourceTreeId ?? "",
+			sourcePersonId: person.sourcePersonId,
+			readAt: Date.now(),
+			layoutKnown: Boolean(site.layoutKnown),
+			diffs,
+		},
+	});
 	connectorLog("ancestry", "compare", {
 		tree: tree.name,
 		treeId: tree.sourceTreeId,

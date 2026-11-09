@@ -994,6 +994,17 @@
       form && (formPersonId() === personId || onEditorPage() && urlPersonId() === personId)
     );
     const diffs = form && sameForm ? diffPerson(form, person, writable) : [];
+    void ask({
+      type: "connector:save-site",
+      snapshot: {
+        source: "myheritage",
+        sourceTreeId: siteId ?? tree.sourceTreeId ?? "",
+        sourcePersonId: person.sourcePersonId,
+        readAt: Date.now(),
+        layoutKnown: sameForm,
+        diffs
+      }
+    });
     connectorLog("myheritage", "compare", {
       tree: tree.name,
       siteId,

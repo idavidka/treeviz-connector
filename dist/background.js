@@ -1,5 +1,5 @@
 import { ancestryFactsUrl } from "./parse-url.js";
-import { BATCH_KEY, INDEX_KEY, LOG_KEY, PERSON_CAP, } from "./protocol.js";
+import { BATCH_KEY, INDEX_KEY, LOG_KEY, SITE_KEY, PERSON_CAP, } from "./protocol.js";
 const TREE_HOSTS = [
     "https://treeviz.com",
     "https://www.treeviz.com",
@@ -128,6 +128,68 @@ const acceptIndex = (message) => {
     };
 };
 const digits = (value) => String(value ?? "").replace(/[^\d]/g, "");
+const FIELD_KEYS = new Set([
+    "name",
+    "sex",
+    "birthDate",
+    "birthPlace",
+    "deathDate",
+    "deathPlace",
+    "marriageDate",
+    "marriagePlace",
+    "parents",
+    "spouses",
+    "children",
+    "fact",
+]);
+const snapshotKey = (snapshot) => `${snapshot.source}:${snapshot.sourceTreeId.toLowerCase()}:${snapshot.sourcePersonId}`;
+const snapshotMap = (value) => {
+    if (!value || typeof value !== "object") {
+        return {};
+    }
+    const map = {};
+    for (const [key, item] of Object.entries(value)) {
+        const snapshot = acceptSnapshot(item);
+        if (snapshot) {
+            map[key] = snapshot;
+        }
+    }
+    return map;
+};
+const acceptSnapshot = (value) => {
+    if (!value || typeof value !== "object") {
+        return undefined;
+    }
+    const raw = value;
+    if (raw.source !== "ancestry" && raw.source !== "myheritage") {
+        return undefined;
+    }
+    const sourcePersonId = digits(raw.sourcePersonId);
+    if (!sourcePersonId || !Array.isArray(raw.diffs)) {
+        return undefined;
+    }
+    const diffs = [];
+    for (const item of raw.diffs) {
+        if (!item || !FIELD_KEYS.has(item.key)) {
+            continue;
+        }
+        diffs.push({
+            key: item.key,
+            label: item.label ? String(item.label) : undefined,
+            site: item.site ? String(item.site) : undefined,
+            treeviz: item.treeviz ? String(item.treeviz) : undefined,
+            writable: Boolean(item.writable),
+        });
+    }
+    return {
+        source: raw.source,
+        sourceTreeId: String(raw.sourceTreeId ?? ""),
+        sourcePersonId,
+        readAt: Number(raw.readAt) || Date.now(),
+        layoutKnown: Boolean(raw.layoutKnown),
+        diffs,
+    };
+};
 const acceptBatch = (message) => {
     if (!Array.isArray(message.people)) {
         return undefined;
@@ -271,6 +333,34 @@ const onMessage = (message, sender, sendResponse) => {
                 }
             }
             sendResponse(fallback);
+        });
+        return true;
+    }
+    if (type === "connector:save-site") {
+        const snapshot = acceptSnapshot(body.snapshot);
+        if (!snapshot) {
+            sendResponse({ ok: false });
+            return false;
+        }
+        void storageGet(chrome.storage.local, SITE_KEY).then(async (value) => {
+            const current = snapshotMap(value);
+            current[snapshotKey(snapshot)] = snapshot;
+            const entries = Object.entries(current).sort((left, right) => right[1].readAt - left[1].readAt);
+            const kept = Object.fromEntries(entries.slice(0, 40));
+            await storageSet(chrome.storage.local, { [SITE_KEY]: kept });
+            sendResponse({ ok: true });
+        });
+        return true;
+    }
+    if (type === "connector:get-site") {
+        void storageGet(chrome.storage.local, SITE_KEY).then((value) => {
+            const current = snapshotMap(value);
+            const key = snapshotKey({
+                source: body.source === "myheritage" ? "myheritage" : "ancestry",
+                sourceTreeId: String(body.sourceTreeId ?? ""),
+                sourcePersonId: digits(body.sourcePersonId),
+            });
+            sendResponse({ ok: true, snapshot: current[key] });
         });
         return true;
     }

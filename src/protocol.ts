@@ -3,6 +3,7 @@
 export const INDEX_KEY = "treevizConnectorIndex";
 export const BATCH_KEY = "treevizConnectorBatch";
 export const LOG_KEY = "treevizConnectorLog";
+export const SITE_KEY = "treevizConnectorSites";
 export const PERSON_CAP = 5000;
 
 export type ConnectorSource = "ancestry" | "myheritage" | "other";
@@ -93,4 +94,14 @@ export type FieldDiff = {
 	site?: string;
 	treeviz?: string;
 	writable: boolean;
+};
+
+/** Last compare from an Ancestry or MyHeritage page, shown on the TreeViz profile. */
+export type SiteSnapshot = {
+	source: "ancestry" | "myheritage";
+	sourceTreeId: string;
+	sourcePersonId: string;
+	readAt: number;
+	layoutKnown: boolean;
+	diffs: FieldDiff[];
 };
