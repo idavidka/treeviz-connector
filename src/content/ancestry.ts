@@ -430,6 +430,68 @@ const splitLines = (lines: string[]): { spouses: SiteRelative[]; children: SiteR
 	return { spouses, children };
 };
 
+const SPOUSE_AND_CHILDREN = new Set([
+	"spouse and children",
+	"spouses and children",
+	"spouse/partner and children",
+	"spouses/partners and children",
+	"házastárs és gyerekek",
+	"házastársak és gyermekek",
+	"házastárs és gyermekek",
+]);
+const SPOUSE_ONLY = new Set([
+	"spouse",
+	"spouses",
+	"spouse/partner",
+	"spouses/partners",
+	"házastárs",
+	"házastársak",
+]);
+
+const readFamilyLists = (
+	root: HTMLElement
+): { spouses: SiteRelative[]; children: SiteRelative[]; found: boolean } => {
+	const spouses: SiteRelative[] = [];
+	const children: SiteRelative[] = [];
+	let found = false;
+	root.querySelectorAll("h2, h3, h4").forEach((heading) => {
+		const title = (heading.textContent || "").trim().toLocaleLowerCase();
+		const withChildren = SPOUSE_AND_CHILDREN.has(title);
+		const spousesOnly = SPOUSE_ONLY.has(title);
+		if (!withChildren && !spousesOnly) {
+			return;
+		}
+		const list = heading.nextElementSibling;
+		if (!list || list.tagName !== "UL") {
+			return;
+		}
+		found = true;
+		Array.from(list.children).forEach((item) => {
+			if (item.tagName !== "LI") {
+				return;
+			}
+			const nested = Array.from(item.children).find((child) => child.tagName === "UL");
+			const topLink = Array.from(item.querySelectorAll("a[href*='/person/']")).find(
+				(anchor) => !nested || !nested.contains(anchor)
+			) as HTMLAnchorElement | undefined;
+			// A year range is on spouses and children alike. Indent (or a nested list)
+			// marks the children under "Spouse and children". A "Spouse" heading is spouses only.
+			const childRow =
+				withChildren &&
+				(item.classList.contains("researchListItemIndented") || Boolean(nested));
+			if (topLink) {
+				pushRelative(childRow && !nested ? children : spouses, relativeFrom(topLink));
+			}
+			if (withChildren && nested) {
+				nested.querySelectorAll("a[href*='/person/']").forEach((anchor) => {
+					pushRelative(children, relativeFrom(anchor as HTMLAnchorElement));
+				});
+			}
+		});
+	});
+	return { spouses, children, found };
+};
+
 const readRelatives = (): {
 	parents: SiteRelative[];
 	spouses: SiteRelative[];
@@ -449,8 +511,18 @@ const readRelatives = (): {
 		return empty;
 	}
 	const parentsHeading = leafHeading(root, PARENT_LABELS);
-	const householdHeading = leafHeading(root, HOUSEHOLD_LABELS);
+	const familyLists = readFamilyLists(root);
+	const householdHeading = familyLists.found ? undefined : leafHeading(root, HOUSEHOLD_LABELS);
 	const parents = parentsHeading ? namesAfter(root, parentsHeading, HOUSEHOLD_LABELS) : [];
+	if (familyLists.found) {
+		return {
+			parents,
+			spouses: familyLists.spouses,
+			children: familyLists.children,
+			parentsFound: Boolean(parentsHeading),
+			householdFound: true,
+		};
+	}
 	const linked = householdHeading ? splitHousehold(root, householdHeading) : { spouses: [], children: [] };
 	const fromLines =
 		householdHeading && !linked.spouses.length && !linked.children.length

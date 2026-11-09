@@ -26,18 +26,22 @@
     marzo: 3,
     mar\u00E7o: 3,
     "m\xE1rcius": 3,
+    m\u00E1rc: 3,
+    marc: 3,
     apr: 4,
     april: 4,
     avril: 4,
     abril: 4,
     aprile: 4,
     "\xE1prilis": 4,
+    \u00E1pr: 4,
     may: 5,
     mai: 5,
     mayo: 5,
     maggio: 5,
     maj: 5,
     "m\xE1jus": 5,
+    m\u00E1j: 5,
     jun: 6,
     june: 6,
     juni: 6,
@@ -46,6 +50,7 @@
     giugno: 6,
     junho: 6,
     "j\xFAnius": 6,
+    j\u00FAn: 6,
     jul: 7,
     july: 7,
     juli: 7,
@@ -54,6 +59,7 @@
     luglio: 7,
     julho: 7,
     "j\xFAlius": 7,
+    j\u00FAl: 7,
     aug: 8,
     august: 8,
     ao\u00FBt: 8,
@@ -68,6 +74,7 @@
     settembre: 9,
     setembro: 9,
     "szeptember": 9,
+    szept: 9,
     oct: 10,
     october: 10,
     oktober: 10,
@@ -76,6 +83,7 @@
     ottobre: 10,
     outubro: 10,
     "okt\xF3ber": 10,
+    okt: 10,
     nov: 11,
     november: 11,
     novembre: 11,
@@ -1334,6 +1342,60 @@
     }
     return { spouses, children };
   };
+  var SPOUSE_AND_CHILDREN = /* @__PURE__ */ new Set([
+    "spouse and children",
+    "spouses and children",
+    "spouse/partner and children",
+    "spouses/partners and children",
+    "h\xE1zast\xE1rs \xE9s gyerekek",
+    "h\xE1zast\xE1rsak \xE9s gyermekek",
+    "h\xE1zast\xE1rs \xE9s gyermekek"
+  ]);
+  var SPOUSE_ONLY = /* @__PURE__ */ new Set([
+    "spouse",
+    "spouses",
+    "spouse/partner",
+    "spouses/partners",
+    "h\xE1zast\xE1rs",
+    "h\xE1zast\xE1rsak"
+  ]);
+  var readFamilyLists = (root) => {
+    const spouses = [];
+    const children = [];
+    let found = false;
+    root.querySelectorAll("h2, h3, h4").forEach((heading) => {
+      const title = (heading.textContent || "").trim().toLocaleLowerCase();
+      const withChildren = SPOUSE_AND_CHILDREN.has(title);
+      const spousesOnly = SPOUSE_ONLY.has(title);
+      if (!withChildren && !spousesOnly) {
+        return;
+      }
+      const list = heading.nextElementSibling;
+      if (!list || list.tagName !== "UL") {
+        return;
+      }
+      found = true;
+      Array.from(list.children).forEach((item) => {
+        if (item.tagName !== "LI") {
+          return;
+        }
+        const nested = Array.from(item.children).find((child) => child.tagName === "UL");
+        const topLink = Array.from(item.querySelectorAll("a[href*='/person/']")).find(
+          (anchor) => !nested || !nested.contains(anchor)
+        );
+        const childRow = withChildren && (item.classList.contains("researchListItemIndented") || Boolean(nested));
+        if (topLink) {
+          pushRelative(childRow && !nested ? children : spouses, relativeFrom(topLink));
+        }
+        if (withChildren && nested) {
+          nested.querySelectorAll("a[href*='/person/']").forEach((anchor) => {
+            pushRelative(children, relativeFrom(anchor));
+          });
+        }
+      });
+    });
+    return { spouses, children, found };
+  };
   var readRelatives = () => {
     const empty = {
       parents: [],
@@ -1347,8 +1409,18 @@
       return empty;
     }
     const parentsHeading = leafHeading(root, PARENT_LABELS);
-    const householdHeading = leafHeading(root, HOUSEHOLD_LABELS);
+    const familyLists = readFamilyLists(root);
+    const householdHeading = familyLists.found ? void 0 : leafHeading(root, HOUSEHOLD_LABELS);
     const parents = parentsHeading ? namesAfter(root, parentsHeading, HOUSEHOLD_LABELS) : [];
+    if (familyLists.found) {
+      return {
+        parents,
+        spouses: familyLists.spouses,
+        children: familyLists.children,
+        parentsFound: Boolean(parentsHeading),
+        householdFound: true
+      };
+    }
     const linked = householdHeading ? splitHousehold(root, householdHeading) : { spouses: [], children: [] };
     const fromLines = householdHeading && !linked.spouses.length && !linked.children.length ? splitLines(sectionLines(householdHeading, [])) : linked;
     return {
