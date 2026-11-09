@@ -447,7 +447,7 @@
   var hidden = false;
   var ready = false;
   var persistHidden = (value) => {
-    chrome.storage.session.set({ [HIDDEN_KEY]: value });
+    chrome.storage.local.set({ [HIDDEN_KEY]: value });
   };
   var removeHost = () => {
     document.getElementById(HOST_ID)?.remove();
@@ -688,8 +688,8 @@
     }
     render(host, model);
   };
-  chrome.storage.session.get(HIDDEN_KEY, (items) => {
-    hidden = Boolean(items[HIDDEN_KEY]);
+  chrome.storage.local.get(HIDDEN_KEY, (items) => {
+    hidden = Boolean(items?.[HIDDEN_KEY]);
     ready = true;
     if (current.heading || current.detail) {
       showPanel(current);
