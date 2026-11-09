@@ -13,36 +13,49 @@ const render = (host, model) => {
     style.textContent = `
 		:host { all: initial; }
 		.card {
-			font: 13px/1.4 system-ui, sans-serif;
-			color: #1c1917;
-			background: #fff;
-			border: 1px solid #d6d3d1;
-			border-radius: 12px;
-			box-shadow: 0 10px 30px rgba(0,0,0,.18);
+			font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+			color: #101828;
+			background: #ffffff;
+			border: 1px solid #e3e6ec;
+			border-radius: 14px;
+			box-shadow: 0 12px 24px rgba(16, 24, 40, 0.10), 0 4px 8px rgba(16, 24, 40, 0.06);
 			width: 340px;
 			max-height: 70vh;
 			overflow: auto;
-			padding: 12px 14px 14px;
+			padding: 14px;
 		}
-		h2 { font-size: 14px; margin: 0 0 6px; }
-		p { margin: 0 0 8px; }
-		.muted { color: #57534e; font-size: 12px; }
-		.warn { color: #9a3412; font-size: 12px; }
+		h2 { font-size: 15px; font-weight: 700; margin: 0 0 6px; letter-spacing: -0.01em; }
+		p { margin: 0 0 8px; color: #344054; }
+		.muted { color: #667085; font-size: 12px; }
+		.warn { color: #b54708; font-size: 12px; }
 		.row { display: grid; grid-template-columns: 16px 1fr; gap: 8px; margin: 8px 0; }
 		.k { font-weight: 600; }
 		button, a.btn {
-			display: inline-block;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			height: 32px;
 			margin-top: 8px;
-			background: #166534;
+			background: #6366f1;
 			color: #fff;
 			border: 0;
-			border-radius: 8px;
-			padding: 8px 10px;
+			border-radius: 12px;
+			padding: 0 12px;
 			font: inherit;
+			font-size: 12px;
+			font-weight: 600;
 			cursor: pointer;
 			text-decoration: none;
+			box-shadow: 0 8px 24px rgba(99, 102, 241, 0.28);
 		}
-		button.alt, a.alt { background: #44403c; margin-right: 6px; }
+		button:hover, a.btn:hover { background: #4f46e5; }
+		button.alt, a.alt {
+			background: #ffffff;
+			color: #344054;
+			border: 1px solid #e3e6ec;
+			box-shadow: none;
+			margin-right: 6px;
+		}
 		button:disabled { opacity: .5; cursor: default; }
 		details { margin-top: 10px; }
 		summary { cursor: pointer; color: #57534e; font-size: 12px; }
