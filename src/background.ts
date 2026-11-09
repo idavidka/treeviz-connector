@@ -272,6 +272,42 @@ const onMessage = (
 		return true;
 	}
 
+	if (type === "connector:update-treeviz") {
+		void chrome.tabs
+			.query({
+				url: [
+					"https://treeviz.com/*",
+					"https://www.treeviz.com/*",
+					"https://dev.treeviz.com/*",
+					"https://qa.treeviz.com/*",
+					"http://localhost/*",
+				],
+			})
+			.then(async (tabs) => {
+				let fallback: unknown = { ok: false, code: "closed" };
+				for (const tab of tabs) {
+					if (tab.id == null) {
+						continue;
+					}
+					try {
+						const response = await chrome.tabs.sendMessage(tab.id, body);
+						const result = response as { ok?: boolean } | undefined;
+						if (result?.ok) {
+							sendResponse(result);
+							return;
+						}
+						if (result) {
+							fallback = result;
+						}
+					} catch {
+						continue;
+					}
+				}
+				sendResponse(fallback);
+			});
+		return true;
+	}
+
 	if (type === "connector:get-index") {
 		void storageGet(chrome.storage.local, INDEX_KEY).then((value) =>
 			sendResponse({ ok: true, index: asIndex(value) })

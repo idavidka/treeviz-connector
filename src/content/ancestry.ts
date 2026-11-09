@@ -498,8 +498,42 @@ const showTree = (tree: ConnectorTree, personId: string, cachedAt?: number): voi
 				? t("relativesStale")
 				: undefined,
 		layoutKnown: site.layoutKnown,
-		onWrite: (keys) => {
-			void writeSelected(person, site, keys);
+		onUpdateSite: (key) => {
+			if (key === "parents" || key === "spouses" || key === "children") {
+				patchPanel({ status: t("relativesNotWritten") });
+				return;
+			}
+			if (!writableOnAncestry(key)) {
+				patchPanel({ status: t("layout") });
+				return;
+			}
+			void writeSelected(person, site, [key]);
+		},
+		onUpdateTree: (key) => {
+			const diff = diffs.find((item) => item.key === key);
+			patchPanel({ busy: true });
+			void ask({
+				type: "connector:update-treeviz",
+				sourcePersonId: person.sourcePersonId,
+				sourceTreeId: tree.sourceTreeId,
+				key,
+				site: diff?.site,
+				treeviz: diff?.treeviz,
+			}).then((response) => {
+				const code = String(response.code ?? "");
+				const names = String(response.names ?? "");
+				const statusText =
+					code === "added"
+						? t("addedRelatives", { names })
+						: code === "fact"
+							? t("updatedTree")
+							: code === "nothing"
+								? t("nothingToAdd")
+								: code === "ambiguous"
+									? t("ambiguous", { names })
+									: t("treeClosed");
+				patchPanel({ busy: false, status: statusText });
+			});
 		},
 	});
 };

@@ -232,6 +232,14 @@
     onMyHeritage: "MyHeritagen",
     treeviz: "TreeViz",
     update: "Kijel\xF6ltek be\xEDr\xE1sa",
+    updateSource: "{{source}} friss\xEDt\xE9se",
+    updateTree: "Friss\xEDt\xE9s TreeVizben",
+    updatedTree: "Be\xEDrva a TreeVizbe.",
+    addedRelatives: "Felv\xE9ve a TreeVizbe: {{names}}",
+    nothingToAdd: "A TreeVizben m\xE1r megvan minden n\xE9v err\u0151l az oldalr\xF3l.",
+    treeClosed: "Nyisd meg ezt a f\xE1t a TreeVizben, azt\xE1n pr\xF3b\xE1ld \xFAjra.",
+    ambiguous: "T\xF6bb ilyen nev\u0171 szem\xE9ly van a f\xE1ban: {{names}}",
+    relativesNotWritten: "Rokont ezen az elrendez\xE9sen m\xE9g nem \xEDr a forr\xE1s oldalra.",
     warning: "A m\xF3dos\xEDt\xE1s az oldalon marad. A TreeViz nem tudja visszavonni. Csak a bejel\xF6lt mez\u0151k \xEDr\xF3dnak.",
     layout: "Ezt az oldal-elrendez\xE9st a TreeViz Connector nem ismeri, ez\xE9rt nem \xEDr.",
     noDiff: "A TreeViz \xE9s az oldal adatai egyeznek.",
@@ -278,6 +286,14 @@
     onMyHeritage: "On MyHeritage",
     treeviz: "TreeViz",
     update: "Write selected fields",
+    updateSource: "Update {{source}}",
+    updateTree: "Update in TreeViz",
+    updatedTree: "Written to TreeViz.",
+    addedRelatives: "Added to TreeViz: {{names}}",
+    nothingToAdd: "TreeViz already has every name from this page.",
+    treeClosed: "Open this tree in TreeViz, then try again.",
+    ambiguous: "More than one person in the tree has this name: {{names}}",
+    relativesNotWritten: "Relatives are not written to the source site on this layout.",
     warning: "The change stays on this site. TreeViz cannot undo it. Only checked fields are written.",
     layout: "TreeViz Connector does not know this page layout, so it will not write.",
     noDiff: "TreeViz and this site match.",
@@ -467,6 +483,16 @@
     }
     return t("site");
   };
+  var sourceProduct = () => {
+    const host = location.hostname.toLowerCase();
+    if (host.includes("ancestry")) {
+      return "Ancestry";
+    }
+    if (host.includes("myheritage")) {
+      return "MyHeritage";
+    }
+    return "TreeViz";
+  };
   var render = (host, model) => {
     const root = host.shadowRoot;
     if (!root) {
@@ -502,7 +528,9 @@
 		p { margin: 0 0 8px; color: #344054; }
 		.muted { color: #667085; font-size: 12px; }
 		.warn { color: #b54708; font-size: 12px; }
-		.row { display: grid; grid-template-columns: 16px 1fr; gap: 8px; margin: 8px 0; }
+		.row { display: block; margin: 10px 0; padding-top: 8px; border-top: 1px solid #e3e6ec; }
+		.actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+		.actions button { margin: 0; height: 28px; }
 		.k { font-weight: 600; }
 		button, a.btn {
 			display: inline-flex;
@@ -585,6 +613,12 @@
       }
     }
     const selected = /* @__PURE__ */ new Set();
+    if (model.diffs?.some((diff) => diff.writable)) {
+      const warn = document.createElement("p");
+      warn.className = "warn";
+      warn.textContent = t("warning");
+      card.append(warn);
+    }
     if (model.diffs) {
       if (model.diffs.length === 0 && !model.relativesNote) {
         const p = document.createElement("p");
@@ -597,23 +631,11 @@
         card.append(p);
       }
       for (const diff of model.diffs) {
-        const row = document.createElement("label");
+        const row = document.createElement("div");
         row.className = "row";
-        const box = document.createElement("input");
-        box.type = "checkbox";
-        box.disabled = !diff.writable || Boolean(model.busy);
         if (diff.writable) {
-          box.checked = true;
           selected.add(diff.key);
-          box.addEventListener("change", () => {
-            if (box.checked) {
-              selected.add(diff.key);
-            } else {
-              selected.delete(diff.key);
-            }
-          });
         }
-        const text = document.createElement("div");
         const name = document.createElement("div");
         name.className = "k";
         name.textContent = label(diff.key);
@@ -621,8 +643,26 @@
         site.textContent = `${sourceLabel()}: ${diff.site || "\u2014"}`;
         const tree = document.createElement("div");
         tree.textContent = `${t("treeviz")}: ${diff.treeviz || "\u2014"}`;
-        text.append(name, site, tree);
-        row.append(box, text);
+        const actions = document.createElement("div");
+        actions.className = "actions";
+        if (model.onUpdateSite && diff.treeviz) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.textContent = t("updateSource", { source: sourceProduct() });
+          button.disabled = Boolean(model.busy);
+          button.addEventListener("click", () => model.onUpdateSite?.(diff.key));
+          actions.append(button);
+        }
+        if (model.onUpdateTree && diff.site) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "alt";
+          button.textContent = t("updateTree");
+          button.disabled = Boolean(model.busy);
+          button.addEventListener("click", () => model.onUpdateTree?.(diff.key));
+          actions.append(button);
+        }
+        row.append(name, site, tree, actions);
         card.append(row);
       }
     }
@@ -904,9 +944,26 @@
       diffs: sameForm ? diffs : void 0,
       layoutKnown: sameForm ? true : void 0,
       status: sameForm ? void 0 : t("openEdit"),
-      onWrite: sameForm ? (keys) => {
-        void writeSelected(person, keys);
+      onUpdateSite: sameForm ? (key) => {
+        void writeSelected(person, [key]);
       } : void 0,
+      onUpdateTree: (key) => {
+        const diff = diffs.find((item) => item.key === key);
+        patchPanel({ busy: true });
+        void ask({
+          type: "connector:update-treeviz",
+          sourcePersonId: person.sourcePersonId,
+          sourceTreeId: tree.sourceTreeId,
+          key,
+          site: diff?.site,
+          treeviz: diff?.treeviz
+        }).then((response) => {
+          const code = String(response.code ?? "");
+          const names = String(response.names ?? "");
+          const statusText = code === "added" ? t("addedRelatives", { names }) : code === "fact" ? t("updatedTree") : code === "nothing" ? t("nothingToAdd") : code === "ambiguous" ? t("ambiguous", { names }) : t("treeClosed");
+          patchPanel({ busy: false, status: statusText });
+        });
+      },
       onPickTree: void 0
     });
     if (!sameForm) {

@@ -12,6 +12,8 @@ export type PanelModel = {
 	layoutKnown?: boolean;
 	sourceUrl?: string;
 	onWrite?: (keys: FieldKey[]) => void;
+	onUpdateSite?: (key: FieldKey) => void;
+	onUpdateTree?: (key: FieldKey) => void;
 	busy?: boolean;
 	status?: string;
 	relativesNote?: string;
@@ -43,6 +45,17 @@ const sourceLabel = (): string => {
 		return t("onMyHeritage");
 	}
 	return t("site");
+};
+
+const sourceProduct = (): string => {
+	const host = location.hostname.toLowerCase();
+	if (host.includes("ancestry")) {
+		return "Ancestry";
+	}
+	if (host.includes("myheritage")) {
+		return "MyHeritage";
+	}
+	return "TreeViz";
 };
 
 const render = (host: HTMLElement, model: PanelModel): void => {
@@ -80,7 +93,9 @@ const render = (host: HTMLElement, model: PanelModel): void => {
 		p { margin: 0 0 8px; color: #344054; }
 		.muted { color: #667085; font-size: 12px; }
 		.warn { color: #b54708; font-size: 12px; }
-		.row { display: grid; grid-template-columns: 16px 1fr; gap: 8px; margin: 8px 0; }
+		.row { display: block; margin: 10px 0; padding-top: 8px; border-top: 1px solid #e3e6ec; }
+		.actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+		.actions button { margin: 0; height: 28px; }
 		.k { font-weight: 600; }
 		button, a.btn {
 			display: inline-flex;
@@ -163,6 +178,12 @@ const render = (host: HTMLElement, model: PanelModel): void => {
 		}
 	}
 	const selected = new Set<FieldKey>();
+	if (model.diffs?.some((diff) => diff.writable)) {
+		const warn = document.createElement("p");
+		warn.className = "warn";
+		warn.textContent = t("warning");
+		card.append(warn);
+	}
 	if (model.diffs) {
 		if (model.diffs.length === 0 && !model.relativesNote) {
 			const p = document.createElement("p");
@@ -175,23 +196,11 @@ const render = (host: HTMLElement, model: PanelModel): void => {
 			card.append(p);
 		}
 		for (const diff of model.diffs) {
-			const row = document.createElement("label");
+			const row = document.createElement("div");
 			row.className = "row";
-			const box = document.createElement("input");
-			box.type = "checkbox";
-			box.disabled = !diff.writable || Boolean(model.busy);
 			if (diff.writable) {
-				box.checked = true;
 				selected.add(diff.key);
-				box.addEventListener("change", () => {
-					if (box.checked) {
-						selected.add(diff.key);
-					} else {
-						selected.delete(diff.key);
-					}
-				});
 			}
-			const text = document.createElement("div");
 			const name = document.createElement("div");
 			name.className = "k";
 			name.textContent = label(diff.key);
@@ -199,8 +208,26 @@ const render = (host: HTMLElement, model: PanelModel): void => {
 			site.textContent = `${sourceLabel()}: ${diff.site || "—"}`;
 			const tree = document.createElement("div");
 			tree.textContent = `${t("treeviz")}: ${diff.treeviz || "—"}`;
-			text.append(name, site, tree);
-			row.append(box, text);
+			const actions = document.createElement("div");
+			actions.className = "actions";
+			if (model.onUpdateSite && diff.treeviz) {
+				const button = document.createElement("button");
+				button.type = "button";
+				button.textContent = t("updateSource", { source: sourceProduct() });
+				button.disabled = Boolean(model.busy);
+				button.addEventListener("click", () => model.onUpdateSite?.(diff.key));
+				actions.append(button);
+			}
+			if (model.onUpdateTree && diff.site) {
+				const button = document.createElement("button");
+				button.type = "button";
+				button.className = "alt";
+				button.textContent = t("updateTree");
+				button.disabled = Boolean(model.busy);
+				button.addEventListener("click", () => model.onUpdateTree?.(diff.key));
+				actions.append(button);
+			}
+			row.append(name, site, tree, actions);
 			card.append(row);
 		}
 	}

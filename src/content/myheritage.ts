@@ -195,11 +195,37 @@ const showTree = (
 		diffs: sameForm ? diffs : undefined,
 		layoutKnown: sameForm ? true : undefined,
 		status: sameForm ? undefined : t("openEdit"),
-		onWrite: sameForm
-			? (keys) => {
-					void writeSelected(person, keys);
+		onUpdateSite: sameForm
+			? (key) => {
+					void writeSelected(person, [key]);
 				}
 			: undefined,
+		onUpdateTree: (key) => {
+			const diff = diffs.find((item) => item.key === key);
+			patchPanel({ busy: true });
+			void ask({
+				type: "connector:update-treeviz",
+				sourcePersonId: person.sourcePersonId,
+				sourceTreeId: tree.sourceTreeId,
+				key,
+				site: diff?.site,
+				treeviz: diff?.treeviz,
+			}).then((response) => {
+				const code = String(response.code ?? "");
+				const names = String(response.names ?? "");
+				const statusText =
+					code === "added"
+						? t("addedRelatives", { names })
+						: code === "fact"
+							? t("updatedTree")
+							: code === "nothing"
+								? t("nothingToAdd")
+								: code === "ambiguous"
+									? t("ambiguous", { names })
+									: t("treeClosed");
+				patchPanel({ busy: false, status: statusText });
+			});
+		},
 		onPickTree: undefined,
 	});
 	if (!sameForm) {
