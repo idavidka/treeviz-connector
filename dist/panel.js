@@ -98,6 +98,13 @@ const render = (host, model) => {
 			margin-right: 6px;
 		}
 		button:disabled { opacity: .5; cursor: default; }
+		button.open {
+			height: auto;
+			min-height: 32px;
+			padding: 8px 12px;
+			white-space: normal;
+			text-align: center;
+		}
 		details { margin-top: 10px; }
 		summary { cursor: pointer; color: #57534e; font-size: 12px; }
 		pre {
@@ -237,6 +244,15 @@ const render = (host, model) => {
         const p = document.createElement("p");
         p.textContent = model.status;
         card.append(p);
+    }
+    if (model.onOpenEditor) {
+        const open = document.createElement("button");
+        open.type = "button";
+        open.className = "open";
+        open.textContent = t("openEdit");
+        open.disabled = Boolean(model.busy);
+        open.addEventListener("click", () => model.onOpenEditor?.());
+        card.append(open);
     }
     const details = document.createElement("details");
     const summary = document.createElement("summary");

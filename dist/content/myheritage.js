@@ -149,17 +149,34 @@
     const tokens = text.toLocaleLowerCase().replace(/[.,]/g, " ").split(/\s+/).filter(Boolean);
     let month;
     let day;
+    const numbers = [];
     for (const token of tokens) {
       if (MONTHS[token]) {
         month = MONTHS[token];
         continue;
       }
-      if (/^\d{1,2}$/.test(token)) {
+      if (/^\d{1,2}$/.test(token) && token !== yearMatch[0]) {
         const n = Number(token);
-        if (n >= 1 && n <= 31 && day === void 0 && token !== yearMatch[0]) {
-          day = n;
+        if (n >= 1 && n <= 31) {
+          numbers.push(n);
         }
       }
+    }
+    if (month) {
+      day = numbers.find((n) => n >= 1 && n <= 31);
+    } else if (numbers.length >= 2) {
+      const [first, second] = numbers;
+      if (second <= 12) {
+        day = first;
+        month = second;
+      } else if (first <= 12) {
+        month = first;
+        day = second;
+      } else {
+        day = first;
+      }
+    } else if (numbers.length === 1 && numbers[0] <= 12) {
+      month = numbers[0];
     }
     const numeric = text.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})$/);
     if (numeric) {
@@ -1037,6 +1054,13 @@
 			margin-right: 6px;
 		}
 		button:disabled { opacity: .5; cursor: default; }
+		button.open {
+			height: auto;
+			min-height: 32px;
+			padding: 8px 12px;
+			white-space: normal;
+			text-align: center;
+		}
 		details { margin-top: 10px; }
 		summary { cursor: pointer; color: #57534e; font-size: 12px; }
 		pre {
@@ -1176,6 +1200,15 @@
       const p = document.createElement("p");
       p.textContent = model.status;
       card.append(p);
+    }
+    if (model.onOpenEditor) {
+      const open = document.createElement("button");
+      open.type = "button";
+      open.className = "open";
+      open.textContent = t("openEdit");
+      open.disabled = Boolean(model.busy);
+      open.addEventListener("click", () => model.onOpenEditor?.());
+      card.append(open);
     }
     const details = document.createElement("details");
     const summary = document.createElement("summary");
@@ -1855,7 +1888,16 @@ ${body}`;
       cachedAt,
       diffs: sameForm ? diffs : void 0,
       layoutKnown: sameForm ? true : void 0,
-      status: sameForm ? void 0 : t("openEdit"),
+      onOpenEditor: sameForm ? void 0 : () => {
+        patchPanel({ busy: true });
+        void openEditor(personId, siteId).then((opened) => {
+          if (opened) {
+            showTree(tree, personId, siteId, cachedAt);
+          } else {
+            patchPanel({ busy: false, status: t("layout") });
+          }
+        });
+      },
       onUpdateSite: sameForm ? (diff) => {
         if (diff.key === "parents" || diff.key === "spouses" || diff.key === "children") {
           patchPanel({ status: t("relativesNotWritten") });
@@ -1882,22 +1924,6 @@ ${body}`;
       },
       onPickTree: void 0
     });
-    if (!sameForm) {
-      const host = document.getElementById("treeviz-connector-root");
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = t("openEdit");
-      button.addEventListener("click", () => {
-        void openEditor(personId, siteId).then((opened) => {
-          if (opened) {
-            showTree(tree, personId, siteId, cachedAt);
-          } else {
-            patchPanel({ status: t("layout") });
-          }
-        });
-      });
-      host?.shadowRoot?.querySelector(".card")?.append(button);
-    }
   };
   var writeSelected = async (person, diff) => {
     if (!navigator.onLine) {
@@ -2011,25 +2037,76 @@ ${body}`;
     { step: "facts", anyOf: ["factType0"] },
     { step: "biography", anyOf: [] }
   ];
+  var editorCheckUrl = (step) => {
+    if (onEditorPage()) {
+      const url2 = new URL(location.href);
+      url2.searchParams.set("step", step);
+      return url2.toString();
+    }
+    const parsed = parseMyHeritageLocation(location.href);
+    if (!parsed?.siteId || !parsed.personId) {
+      return void 0;
+    }
+    const url = new URL("/FP/edit-profile.php", location.origin);
+    url.searchParams.set("s", parsed.siteId);
+    url.searchParams.set("indID", parsed.personId.replace(/[^\d]/g, ""));
+    url.searchParams.set("origin", "ProfilePage");
+    url.searchParams.set("step", step);
+    return url.toString();
+  };
+  var probeFocus = (doc) => {
+    const form = doc.querySelector("#editProfileForm");
+    if (form instanceof HTMLFormElement) {
+      return form;
+    }
+    return doc.querySelector("#profile-page-root") || doc.querySelector("main") || doc.body;
+  };
   var probeMyHeritage = async () => {
+    const lines2 = [];
+    let html = "";
+    const remember = (doc, step) => {
+      if (html) {
+        return;
+      }
+      html = `
+[${step}]
+${htmlSkeleton(probeFocus(doc))}`;
+    };
     if (!onEditorPage()) {
+      const parsed = parseMyHeritageLocation(location.href);
+      const root = document.querySelector("#profile-page-root");
+      lines2.push({
+        ok: Boolean(parsed?.siteId && parsed.personId),
+        name: "profile url",
+        detail: parsed?.personId ? `indID ${parsed.personId}` : location.pathname
+      });
+      lines2.push({
+        ok: root instanceof HTMLElement && (root.childElementCount > 0 || Boolean(root.shadowRoot)),
+        name: "#profile-page-root",
+        detail: root instanceof HTMLElement ? `${root.childElementCount} children${root.shadowRoot ? " shadow" : ""}` : "absent"
+      });
+      if (!(root instanceof HTMLElement) || root.childElementCount === 0) {
+        remember(document, "profile");
+      }
+    }
+    if (!editorCheckUrl("essentials")) {
       const report2 = formatProbe(
         `myheritage ${location.pathname}`,
-        [{ ok: false, name: "edit-profile.php" }],
-        htmlSkeleton(document.body)
+        [...lines2, { ok: false, name: "edit-profile.php" }],
+        html || htmlSkeleton(probeFocus(document))
       );
       connectorLog("probe", report2);
       return report2;
     }
-    const lines2 = [];
-    let html = "";
     for (const step of EDITOR_STEPS) {
-      const url = new URL(location.href);
-      url.searchParams.set("step", step.step);
+      const url = editorCheckUrl(step.step);
+      if (!url) {
+        continue;
+      }
       let doc = document;
-      if (editorStep() !== step.step) {
+      if (!onEditorPage() || editorStep() !== step.step) {
         try {
-          const response = await fetch(url.toString(), { credentials: "include" });
+          const response = await fetch(url, { credentials: "include" });
           const text = await response.text();
           doc = new DOMParser().parseFromString(text, "text/html");
           lines2.push({ ok: response.ok, name: `${step.step} fetch`, detail: String(response.status) });
@@ -2045,9 +2122,7 @@ ${body}`;
       const form = doc.querySelector("#editProfileForm");
       lines2.push({ ok: form instanceof HTMLFormElement, name: `${step.step} #editProfileForm` });
       if (!(form instanceof HTMLFormElement)) {
-        html += `
-[${step.step}]
-${htmlSkeleton(doc.body)}`;
+        remember(doc, step.step);
         continue;
       }
       if (step.step === "family") {
@@ -2059,9 +2134,7 @@ ${htmlSkeleton(doc.body)}`;
         const area = form.querySelector("textarea");
         lines2.push({ ok: area instanceof HTMLTextAreaElement, name: "biography textarea" });
         if (!(area instanceof HTMLTextAreaElement)) {
-          html += `
-[biography]
-${htmlSkeleton(form)}`;
+          remember(doc, "biography");
         }
         continue;
       }
@@ -2072,9 +2145,7 @@ ${htmlSkeleton(form)}`;
         detail: found.length ? found.join(",") : `expected ${step.anyOf.join("|")}`
       });
       if (!found.length) {
-        html += `
-[${step.step}]
-${htmlSkeleton(form)}`;
+        remember(doc, step.step);
       }
     }
     const report = formatProbe(`myheritage ${location.pathname}`, lines2, html || void 0);

@@ -132,17 +132,34 @@
     const tokens = text.toLocaleLowerCase().replace(/[.,]/g, " ").split(/\s+/).filter(Boolean);
     let month;
     let day;
+    const numbers = [];
     for (const token of tokens) {
       if (MONTHS[token]) {
         month = MONTHS[token];
         continue;
       }
-      if (/^\d{1,2}$/.test(token)) {
+      if (/^\d{1,2}$/.test(token) && token !== yearMatch[0]) {
         const n = Number(token);
-        if (n >= 1 && n <= 31 && day === void 0 && token !== yearMatch[0]) {
-          day = n;
+        if (n >= 1 && n <= 31) {
+          numbers.push(n);
         }
       }
+    }
+    if (month) {
+      day = numbers.find((n) => n >= 1 && n <= 31);
+    } else if (numbers.length >= 2) {
+      const [first, second] = numbers;
+      if (second <= 12) {
+        day = first;
+        month = second;
+      } else if (first <= 12) {
+        month = first;
+        day = second;
+      } else {
+        day = first;
+      }
+    } else if (numbers.length === 1 && numbers[0] <= 12) {
+      month = numbers[0];
     }
     const numeric = text.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})$/);
     if (numeric) {
@@ -1307,6 +1324,13 @@
 			margin-right: 6px;
 		}
 		button:disabled { opacity: .5; cursor: default; }
+		button.open {
+			height: auto;
+			min-height: 32px;
+			padding: 8px 12px;
+			white-space: normal;
+			text-align: center;
+		}
 		details { margin-top: 10px; }
 		summary { cursor: pointer; color: #57534e; font-size: 12px; }
 		pre {
@@ -1446,6 +1470,15 @@
       const p = document.createElement("p");
       p.textContent = model.status;
       card.append(p);
+    }
+    if (model.onOpenEditor) {
+      const open = document.createElement("button");
+      open.type = "button";
+      open.className = "open";
+      open.textContent = t("openEdit");
+      open.disabled = Boolean(model.busy);
+      open.addEventListener("click", () => model.onOpenEditor?.());
+      card.append(open);
     }
     const details = document.createElement("details");
     const summary = document.createElement("summary");

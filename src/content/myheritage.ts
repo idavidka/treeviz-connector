@@ -653,7 +653,18 @@ const showTree = (
 		cachedAt,
 		diffs: sameForm ? diffs : undefined,
 		layoutKnown: sameForm ? true : undefined,
-		status: sameForm ? undefined : t("openEdit"),
+		onOpenEditor: sameForm
+			? undefined
+			: () => {
+					patchPanel({ busy: true });
+					void openEditor(personId, siteId).then((opened) => {
+						if (opened) {
+							showTree(tree, personId, siteId, cachedAt);
+						} else {
+							patchPanel({ busy: false, status: t("layout") });
+						}
+					});
+				},
 		onUpdateSite: sameForm
 			? (diff) => {
 					if (diff.key === "parents" || diff.key === "spouses" || diff.key === "children") {
@@ -691,22 +702,6 @@ const showTree = (
 		},
 		onPickTree: undefined,
 	});
-	if (!sameForm) {
-		const host = document.getElementById("treeviz-connector-root");
-		const button = document.createElement("button");
-		button.type = "button";
-		button.textContent = t("openEdit");
-		button.addEventListener("click", () => {
-			void openEditor(personId, siteId).then((opened) => {
-				if (opened) {
-					showTree(tree, personId, siteId, cachedAt);
-				} else {
-					patchPanel({ status: t("layout") });
-				}
-			});
-		});
-		host?.shadowRoot?.querySelector(".card")?.append(button);
-	}
 };
 
 const writeSelected = async (person: ConnectorPerson, diff: FieldDiff): Promise<void> => {
@@ -826,25 +821,79 @@ const EDITOR_STEPS: Array<{ step: string; anyOf: string[] }> = [
 	{ step: "biography", anyOf: [] },
 ];
 
+const editorCheckUrl = (step: string): string | undefined => {
+	if (onEditorPage()) {
+		const url = new URL(location.href);
+		url.searchParams.set("step", step);
+		return url.toString();
+	}
+	const parsed = parseMyHeritageLocation(location.href);
+	if (!parsed?.siteId || !parsed.personId) {
+		return undefined;
+	}
+	const url = new URL("/FP/edit-profile.php", location.origin);
+	url.searchParams.set("s", parsed.siteId);
+	url.searchParams.set("indID", parsed.personId.replace(/[^\d]/g, ""));
+	url.searchParams.set("origin", "ProfilePage");
+	url.searchParams.set("step", step);
+	return url.toString();
+};
+
+const probeFocus = (doc: Document): Element => {
+	const form = doc.querySelector("#editProfileForm");
+	if (form instanceof HTMLFormElement) {
+		return form;
+	}
+	return doc.querySelector("#profile-page-root") || doc.querySelector("main") || doc.body;
+};
+
 const probeMyHeritage = async (): Promise<string> => {
+	const lines: ProbeLine[] = [];
+	let html = "";
+	const remember = (doc: Document, step: string) => {
+		if (html) {
+			return;
+		}
+		html = `\n[${step}]\n${htmlSkeleton(probeFocus(doc))}`;
+	};
 	if (!onEditorPage()) {
+		const parsed = parseMyHeritageLocation(location.href);
+		const root = document.querySelector("#profile-page-root");
+		lines.push({
+			ok: Boolean(parsed?.siteId && parsed.personId),
+			name: "profile url",
+			detail: parsed?.personId ? `indID ${parsed.personId}` : location.pathname,
+		});
+		lines.push({
+			ok: root instanceof HTMLElement && (root.childElementCount > 0 || Boolean(root.shadowRoot)),
+			name: "#profile-page-root",
+			detail:
+				root instanceof HTMLElement
+					? `${root.childElementCount} children${root.shadowRoot ? " shadow" : ""}`
+					: "absent",
+		});
+		if (!(root instanceof HTMLElement) || root.childElementCount === 0) {
+			remember(document, "profile");
+		}
+	}
+	if (!editorCheckUrl("essentials")) {
 		const report = formatProbe(
 			`myheritage ${location.pathname}`,
-			[{ ok: false, name: "edit-profile.php" }],
-			htmlSkeleton(document.body)
+			[...lines, { ok: false, name: "edit-profile.php" }],
+			html || htmlSkeleton(probeFocus(document))
 		);
 		connectorLog("probe", report);
 		return report;
 	}
-	const lines: ProbeLine[] = [];
-	let html = "";
 	for (const step of EDITOR_STEPS) {
-		const url = new URL(location.href);
-		url.searchParams.set("step", step.step);
+		const url = editorCheckUrl(step.step);
+		if (!url) {
+			continue;
+		}
 		let doc = document;
-		if (editorStep() !== step.step) {
+		if (!onEditorPage() || editorStep() !== step.step) {
 			try {
-				const response = await fetch(url.toString(), { credentials: "include" });
+				const response = await fetch(url, { credentials: "include" });
 				const text = await response.text();
 				doc = new DOMParser().parseFromString(text, "text/html");
 				lines.push({ ok: response.ok, name: `${step.step} fetch`, detail: String(response.status) });
@@ -860,7 +909,7 @@ const probeMyHeritage = async (): Promise<string> => {
 		const form = doc.querySelector("#editProfileForm");
 		lines.push({ ok: form instanceof HTMLFormElement, name: `${step.step} #editProfileForm` });
 		if (!(form instanceof HTMLFormElement)) {
-			html += `\n[${step.step}]\n${htmlSkeleton(doc.body)}`;
+			remember(doc, step.step);
 			continue;
 		}
 		if (step.step === "family") {
@@ -872,7 +921,7 @@ const probeMyHeritage = async (): Promise<string> => {
 			const area = form.querySelector("textarea");
 			lines.push({ ok: area instanceof HTMLTextAreaElement, name: "biography textarea" });
 			if (!(area instanceof HTMLTextAreaElement)) {
-				html += `\n[biography]\n${htmlSkeleton(form)}`;
+				remember(doc, "biography");
 			}
 			continue;
 		}
@@ -883,7 +932,7 @@ const probeMyHeritage = async (): Promise<string> => {
 			detail: found.length ? found.join(",") : `expected ${step.anyOf.join("|")}`,
 		});
 		if (!found.length) {
-			html += `\n[${step.step}]\n${htmlSkeleton(form)}`;
+			remember(doc, step.step);
 		}
 	}
 	const report = formatProbe(`myheritage ${location.pathname}`, lines, html || undefined);

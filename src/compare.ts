@@ -175,17 +175,34 @@ export const parseLooseDate = (value?: string): LooseDate | undefined => {
 		.filter(Boolean);
 	let month: number | undefined;
 	let day: number | undefined;
+	const numbers: number[] = [];
 	for (const token of tokens) {
 		if (MONTHS[token]) {
 			month = MONTHS[token];
 			continue;
 		}
-		if (/^\d{1,2}$/.test(token)) {
+		if (/^\d{1,2}$/.test(token) && token !== yearMatch[0]) {
 			const n = Number(token);
-			if (n >= 1 && n <= 31 && day === undefined && token !== yearMatch[0]) {
-				day = n;
+			if (n >= 1 && n <= 31) {
+				numbers.push(n);
 			}
 		}
+	}
+	if (month) {
+		day = numbers.find((n) => n >= 1 && n <= 31);
+	} else if (numbers.length >= 2) {
+		const [first, second] = numbers;
+		if (second <= 12) {
+			day = first;
+			month = second;
+		} else if (first <= 12) {
+			month = first;
+			day = second;
+		} else {
+			day = first;
+		}
+	} else if (numbers.length === 1 && numbers[0] <= 12) {
+		month = numbers[0];
 	}
 	// "1990.03.07" or "1990-03-07"
 	const numeric = text.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})$/);
