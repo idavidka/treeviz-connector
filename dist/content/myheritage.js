@@ -101,7 +101,12 @@
   var FACT_TITLE_ALIASES = {
     aka: "also known as",
     "also known": "also known as",
-    "e mail": "email"
+    "e mail": "email",
+    address: "residence",
+    employment: "occupation",
+    "military service": "military",
+    "web link": "web address",
+    "web links": "web address"
   };
   var factTitleKey = (title) => {
     const key = foldName(title);
@@ -118,12 +123,131 @@
     }
     return a.split(" ").sort().join(" ") === b.split(" ").sort().join(" ");
   };
+  var NAME_SUFFIX = /* @__PURE__ */ new Set(["dr", "jr", "sr", "ii", "iii", "iv", "ifj", "phd", "md", "prof"]);
+  var samePersonName = (left, right) => {
+    const strip = (value) => foldName(value).split(" ").filter((word) => word && !NAME_SUFFIX.has(word)).join(" ");
+    return sameName(strip(left), strip(right));
+  };
+  var dateChunk = () => /\b(?:bef|before|abt|about|aft|after|cir|circa|est|cal)\.?\s+\d{4}\b|\b\d{1,2}\s+[a-z]{3,}\.?\s+\d{4}\b|\b[a-z]{3,}\.?\s+\d{4}\b|\b\d{1,2}[./-]\d{1,2}[./-]\d{4}\b|\b\d{4}\b/gi;
+  var factDates = (value) => {
+    const found = collapse(value).match(dateChunk()) ?? [];
+    return [...new Set(found.map((part) => part.trim()))];
+  };
+  var withoutDates = (value) => collapse(value).replace(dateChunk(), " ").replace(/https?:\/\/\S+/gi, " ");
+  var factUrls = (value) => {
+    const found = collapse(value).match(/https?:\/\/[^\s]+/gi) ?? [];
+    return found.map((href2) => {
+      const trimmed = href2.replace(/[),.;]+$/g, "");
+      try {
+        const url = new URL(trimmed);
+        const decode = (part) => {
+          try {
+            return decodeURIComponent(part);
+          } catch {
+            return part;
+          }
+        };
+        const query = decode(url.search.replace(/^\?/, ""));
+        return `${url.origin}${decode(url.pathname)}${query ? `?${query}` : ""}`.replace(/\/$/, "");
+      } catch {
+        return trimmed.replace(/\/$/, "");
+      }
+    });
+  };
+  var sameFactValue = (left, right) => {
+    if (sameName(left, right)) {
+      return true;
+    }
+    const urlsLeft = factUrls(left);
+    const urlsRight = factUrls(right);
+    if (urlsLeft.length && urlsRight.length) {
+      if (!urlsLeft.some((href2) => urlsRight.includes(href2))) {
+        return false;
+      }
+      const leftover = (value) => foldName(collapse(value).replace(/https?:\/\/\S+/gi, " "));
+      const leftName = leftover(left);
+      const rightName = leftover(right);
+      if (!leftName || !rightName) {
+        return true;
+      }
+      return leftName === rightName || leftName.includes(rightName) || rightName.includes(leftName);
+    }
+    const datesLeft = factDates(left);
+    const datesRight = factDates(right);
+    if (datesLeft.length && datesRight.length && !datesLeft.some((date) => datesRight.some((other) => sameDate(date, other)))) {
+      return false;
+    }
+    const textLeft = foldName(withoutDates(left));
+    const textRight = foldName(withoutDates(right));
+    if (!textLeft || !textRight) {
+      return Boolean(datesLeft.length && datesRight.length);
+    }
+    return textLeft === textRight || textLeft.includes(textRight) || textRight.includes(textLeft);
+  };
+  var sameFactText = (left, right) => {
+    const textLeft = foldName(withoutDates(left));
+    const textRight = foldName(withoutDates(right));
+    if (!textLeft || !textRight) {
+      return false;
+    }
+    return textLeft === textRight || textLeft.includes(textRight) || textRight.includes(textLeft);
+  };
+  var diffFactValues = (siteFacts, treeFacts, treeWritable) => {
+    const titles = /* @__PURE__ */ new Map();
+    for (const fact of [...siteFacts, ...treeFacts]) {
+      const key = factTitleKey(fact.title);
+      if (key && !titles.has(key)) {
+        titles.set(key, fact.title);
+      }
+    }
+    const diffs = [];
+    for (const [key, title] of titles) {
+      const siteValues = siteFacts.filter((fact) => factTitleKey(fact.title) === key).map((fact) => fact.value);
+      const treeValues = treeFacts.filter((fact) => factTitleKey(fact.title) === key).map((fact) => fact.value);
+      const unmatchedSite = siteValues.filter(
+        (value) => !treeValues.some((treeValue) => sameFactValue(treeValue, value))
+      );
+      const unmatchedTree = treeValues.filter(
+        (value) => !siteValues.some((siteValue) => sameFactValue(siteValue, value))
+      );
+      const used = /* @__PURE__ */ new Set();
+      for (const site of unmatchedSite) {
+        const index = unmatchedTree.findIndex(
+          (treeValue, treeIndex) => !used.has(treeIndex) && sameFactText(site, treeValue)
+        );
+        if (index >= 0) {
+          used.add(index);
+          diffs.push({
+            key: "fact",
+            label: title,
+            site,
+            treeviz: unmatchedTree[index],
+            writable: treeWritable
+          });
+          continue;
+        }
+        diffs.push({ key: "fact", label: title, site, writable: false });
+      }
+      unmatchedTree.forEach((treeValue, index) => {
+        if (used.has(index)) {
+          return;
+        }
+        diffs.push({
+          key: "fact",
+          label: title,
+          treeviz: treeValue,
+          writable: treeWritable
+        });
+      });
+    }
+    return diffs;
+  };
   var diffNameList = (key, siteNames, treeNames) => {
     const unmatchedSite = siteNames.filter(
-      (siteName) => !treeNames.some((treeName) => sameName(siteName, treeName))
+      (siteName) => !treeNames.some((treeName) => samePersonName(siteName, treeName))
     );
     const unmatchedTree = treeNames.filter(
-      (treeName) => !siteNames.some((siteName) => sameName(siteName, treeName))
+      (treeName) => !siteNames.some((siteName) => samePersonName(siteName, treeName))
     );
     if (!unmatchedSite.length && !unmatchedTree.length) {
       return void 0;
@@ -303,6 +427,8 @@
     treeClosed: "Nyisd meg ezt a f\xE1t a TreeVizben, azt\xE1n pr\xF3b\xE1ld \xFAjra.",
     ambiguous: "T\xF6bb ilyen nev\u0171 szem\xE9ly van a f\xE1ban: {{names}}",
     relativesNotWritten: "Rokont ezen az elrendez\xE9sen m\xE9g nem \xEDr a forr\xE1s oldalra.",
+    noParentSlot: "Mindk\xE9t sz\xFCl\u0151 helye foglalt az Ancestryn.",
+    siteNamesPresent: "Az oldalon m\xE1r szerepel minden n\xE9v.",
     warning: "A m\xF3dos\xEDt\xE1s az oldalon marad. A TreeViz nem tudja visszavonni. Csak a bejel\xF6lt mez\u0151k \xEDr\xF3dnak.",
     layout: "Ezt az oldal-elrendez\xE9st a TreeViz Connector nem ismeri, ez\xE9rt nem \xEDr.",
     noDiff: "A TreeViz \xE9s az oldal adatai egyeznek.",
@@ -363,6 +489,8 @@
     treeClosed: "Open this tree in TreeViz, then try again.",
     ambiguous: "More than one person in the tree has this name: {{names}}",
     relativesNotWritten: "Relatives are not written to the source site on this layout.",
+    noParentSlot: "Both parent slots are already filled on Ancestry.",
+    siteNamesPresent: "Every name is already on the page.",
     warning: "The change stays on this site. TreeViz cannot undo it. Only checked fields are written.",
     layout: "TreeViz Connector does not know this page layout, so it will not write.",
     noDiff: "TreeViz and this site match.",
@@ -423,6 +551,8 @@
     treeClosed: "\xD6ffne diesen Baum in TreeViz, und versuch es noch einmal.",
     ambiguous: "Mehr als eine Person im Baum hat diesen Namen: {{names}}",
     relativesNotWritten: "Verwandte werden in diesem Layout nicht auf die Quellseite geschrieben.",
+    noParentSlot: "Beide Elternpl\xE4tze sind bei Ancestry schon belegt.",
+    siteNamesPresent: "Jeder Name steht schon auf der Seite.",
     warning: "Die \xC4nderung bleibt auf dieser Seite. TreeViz kann sie nicht r\xFCckg\xE4ngig machen. Nur die markierten Felder werden geschrieben.",
     layout: "TreeViz Connector kennt dieses Seitenlayout nicht und schreibt deshalb nicht.",
     noDiff: "TreeViz und diese Seite stimmen \xFCberein.",
@@ -483,6 +613,8 @@
     treeClosed: "Ouvre cet arbre dans TreeViz, puis r\xE9essaie.",
     ambiguous: "Plus d'une personne dans l'arbre porte ce nom : {{names}}",
     relativesNotWritten: "Les proches ne sont pas \xE9crits sur le site source avec cette mise en page.",
+    noParentSlot: "Les deux places de parents sont d\xE9j\xE0 prises sur Ancestry.",
+    siteNamesPresent: "Tous les noms sont d\xE9j\xE0 sur la page.",
     warning: "La modification reste sur ce site. TreeViz ne peut pas l'annuler. Seuls les champs coch\xE9s sont \xE9crits.",
     layout: "TreeViz Connector ne conna\xEEt pas cette mise en page, donc il n'\xE9crit pas.",
     noDiff: "TreeViz et ce site correspondent.",
@@ -543,6 +675,8 @@
     treeClosed: "Abre este \xE1rbol en TreeViz y vuelve a intentarlo.",
     ambiguous: "M\xE1s de una persona del \xE1rbol tiene este nombre: {{names}}",
     relativesNotWritten: "Los parientes no se escriben en el sitio de origen con este dise\xF1o.",
+    noParentSlot: "Los dos lugares de padres ya est\xE1n ocupados en Ancestry.",
+    siteNamesPresent: "Todos los nombres ya est\xE1n en la p\xE1gina.",
     warning: "El cambio se queda en este sitio. TreeViz no puede deshacerlo. Solo se escriben los campos marcados.",
     layout: "TreeViz Connector no conoce este dise\xF1o de p\xE1gina, as\xED que no escribe.",
     noDiff: "TreeViz y este sitio coinciden.",
@@ -603,6 +737,8 @@
     treeClosed: "\u041E\u0442\u043A\u0440\u043E\u0439 \u044D\u0442\u043E \u0434\u0435\u0440\u0435\u0432\u043E \u0432 TreeViz \u0438 \u043F\u043E\u043F\u0440\u043E\u0431\u0443\u0439 \u0441\u043D\u043E\u0432\u0430.",
     ambiguous: "\u0412 \u0434\u0435\u0440\u0435\u0432\u0435 \u0431\u043E\u043B\u044C\u0448\u0435 \u043E\u0434\u043D\u043E\u0433\u043E \u0447\u0435\u043B\u043E\u0432\u0435\u043A\u0430 \u0441 \u0442\u0430\u043A\u0438\u043C \u0438\u043C\u0435\u043D\u0435\u043C: {{names}}",
     relativesNotWritten: "\u0420\u043E\u0434\u0441\u0442\u0432\u0435\u043D\u043D\u0438\u043A\u043E\u0432 \u0432 \u044D\u0442\u043E\u0439 \u0440\u0430\u0441\u043A\u043B\u0430\u0434\u043A\u0435 \u043D\u0430 \u0441\u0430\u0439\u0442-\u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A \u043D\u0435 \u0437\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442.",
+    noParentSlot: "\u041E\u0431\u0430 \u043C\u0435\u0441\u0442\u0430 \u0440\u043E\u0434\u0438\u0442\u0435\u043B\u0435\u0439 \u043D\u0430 Ancestry \u0443\u0436\u0435 \u0437\u0430\u043D\u044F\u0442\u044B.",
+    siteNamesPresent: "\u0412\u0441\u0435 \u0438\u043C\u0435\u043D\u0430 \u0443\u0436\u0435 \u0435\u0441\u0442\u044C \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435.",
     warning: "\u0418\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u043E\u0441\u0442\u0430\u043D\u0435\u0442\u0441\u044F \u043D\u0430 \u044D\u0442\u043E\u043C \u0441\u0430\u0439\u0442\u0435. TreeViz \u043D\u0435 \u0441\u043C\u043E\u0436\u0435\u0442 \u0435\u0433\u043E \u043E\u0442\u043C\u0435\u043D\u0438\u0442\u044C. \u0417\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u044E\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043E\u0442\u043C\u0435\u0447\u0435\u043D\u043D\u044B\u0435 \u043F\u043E\u043B\u044F.",
     layout: "TreeViz Connector \u043D\u0435 \u0437\u043D\u0430\u0435\u0442 \u044D\u0442\u0443 \u0440\u0430\u0441\u043A\u043B\u0430\u0434\u043A\u0443 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438 \u043F\u043E\u044D\u0442\u043E\u043C\u0443 \u043D\u0435 \u0437\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442.",
     noDiff: "TreeViz \u0438 \u044D\u0442\u043E\u0442 \u0441\u0430\u0439\u0442 \u0441\u043E\u0432\u043F\u0430\u0434\u0430\u044E\u0442.",
@@ -663,6 +799,8 @@
     treeClosed: "\u3053\u306E\u5BB6\u7CFB\u56F3\u3092 TreeViz \u3067\u958B\u3044\u3066\u3001\u3082\u3046\u4E00\u5EA6\u8A66\u3057\u3066\u3002",
     ambiguous: "\u540C\u3058\u540D\u524D\u306E\u4EBA\u304C\u8907\u6570\u3044\u308B: {{names}}",
     relativesNotWritten: "\u3053\u306E\u30EC\u30A4\u30A2\u30A6\u30C8\u3067\u306F\u89AA\u65CF\u3092\u5143\u306E\u30B5\u30A4\u30C8\u306B\u66F8\u304D\u8FBC\u307E\u306A\u3044\u3002",
+    noParentSlot: "Ancestry\u3067\u306F\u4E21\u89AA\u306E\u6B04\u304C\u4E21\u65B9\u57CB\u307E\u3063\u3066\u3044\u308B\u3002",
+    siteNamesPresent: "\u3069\u306E\u540D\u524D\u3082\u30DA\u30FC\u30B8\u4E0A\u306B\u3059\u3067\u306B\u3042\u308B\u3002",
     warning: "\u5909\u66F4\u306F\u3053\u306E\u30B5\u30A4\u30C8\u306B\u6B8B\u308B\u3002TreeViz \u306F\u53D6\u308A\u6D88\u305B\u306A\u3044\u3002\u30C1\u30A7\u30C3\u30AF\u3057\u305F\u9805\u76EE\u3060\u3051\u66F8\u304D\u8FBC\u3080\u3002",
     layout: "TreeViz Connector \u306F\u3053\u306E\u30DA\u30FC\u30B8\u306E\u30EC\u30A4\u30A2\u30A6\u30C8\u3092\u77E5\u3089\u306A\u3044\u306E\u3067\u3001\u66F8\u304D\u8FBC\u307E\u306A\u3044\u3002",
     noDiff: "TreeViz \u3068\u3053\u306E\u30B5\u30A4\u30C8\u306F\u4E00\u81F4\u3057\u3066\u3044\u308B\u3002",
@@ -723,6 +861,8 @@
     treeClosed: "\u5728 TreeViz \u91CC\u6253\u5F00\u8FD9\u4E2A\u5BB6\u8C31\uFF0C\u7136\u540E\u518D\u8BD5\u4E00\u6B21\u3002",
     ambiguous: "\u5BB6\u8C31\u91CC\u6709\u4E0D\u6B62\u4E00\u4E2A\u540C\u540D\u7684\u4EBA\uFF1A{{names}}",
     relativesNotWritten: "\u8FD9\u79CD\u7248\u5F0F\u4E0D\u4F1A\u628A\u4EB2\u5C5E\u5199\u56DE\u6E90\u7F51\u7AD9\u3002",
+    noParentSlot: "Ancestry \u4E0A\u7684\u7236\u6BCD\u4F4D\u7F6E\u90FD\u5DF2\u5360\u7528\u3002",
+    siteNamesPresent: "\u9875\u9762\u4E0A\u5DF2\u7ECF\u6709\u8FD9\u4E9B\u540D\u5B57\u3002",
     warning: "\u4FEE\u6539\u4F1A\u7559\u5728\u8FD9\u4E2A\u7F51\u7AD9\u4E0A\u3002TreeViz \u4E0D\u80FD\u64A4\u9500\u3002\u53EA\u4F1A\u5199\u5165\u52FE\u9009\u7684\u5B57\u6BB5\u3002",
     layout: "TreeViz Connector \u4E0D\u8BA4\u8BC6\u8FD9\u4E2A\u9875\u9762\u7248\u5F0F\uFF0C\u6240\u4EE5\u4E0D\u4F1A\u5199\u5165\u3002",
     noDiff: "TreeViz \u548C\u8FD9\u4E2A\u7F51\u7AD9\u4E00\u81F4\u3002",
@@ -1649,33 +1789,7 @@ ${body}`;
     }
     return { facts, relatives };
   };
-  var factListDiffs = (siteFacts, treeFacts) => {
-    const titles = /* @__PURE__ */ new Map();
-    for (const fact of [...siteFacts, ...treeFacts]) {
-      const key = factTitleKey(fact.title);
-      if (key && !titles.has(key)) {
-        titles.set(key, fact.title);
-      }
-    }
-    const diffs = [];
-    for (const [key, title] of titles) {
-      const siteValues = siteFacts.filter((fact) => factTitleKey(fact.title) === key).map((fact) => fact.value);
-      const treeValues = treeFacts.filter((fact) => factTitleKey(fact.title) === key).map((fact) => fact.value);
-      for (const value of siteValues) {
-        if (treeValues.some((treeValue) => sameName(treeValue, value))) {
-          continue;
-        }
-        diffs.push({ key: "fact", label: title, site: value, writable: false });
-      }
-      for (const value of treeValues) {
-        if (siteValues.some((siteValue) => sameName(siteValue, value))) {
-          continue;
-        }
-        diffs.push({ key: "fact", label: title, treeviz: value, writable: true });
-      }
-    }
-    return diffs;
-  };
+  var factListDiffs = (siteFacts, treeFacts) => diffFactValues(siteFacts, treeFacts, true);
   var writable = (_key) => true;
   var dateFields = (prefix, raw) => {
     const parsed = parseLooseDate(raw);
@@ -1847,8 +1961,7 @@ ${body}`;
       const namesOf = (ids) => (ids ?? []).map((id) => personIn(tree, id)?.name || "").filter(Boolean);
       const groups = [
         ["parents", person.parentIds],
-        ["spouses", person.spouseIds],
-        ["children", person.childIds]
+        ["spouses", person.spouseIds]
       ];
       for (const [key, ids] of groups) {
         const diff = diffNameList(key, sections.relatives[key], namesOf(ids));

@@ -101,7 +101,12 @@
   var FACT_TITLE_ALIASES = {
     aka: "also known as",
     "also known": "also known as",
-    "e mail": "email"
+    "e mail": "email",
+    address: "residence",
+    employment: "occupation",
+    "military service": "military",
+    "web link": "web address",
+    "web links": "web address"
   };
   var factTitleKey = (title) => {
     const key = foldName(title);
@@ -117,6 +122,195 @@
       return true;
     }
     return a.split(" ").sort().join(" ") === b.split(" ").sort().join(" ");
+  };
+  var NAME_SUFFIX = /* @__PURE__ */ new Set(["dr", "jr", "sr", "ii", "iii", "iv", "ifj", "phd", "md", "prof"]);
+  var samePersonName = (left, right) => {
+    const strip = (value) => foldName(value).split(" ").filter((word) => word && !NAME_SUFFIX.has(word)).join(" ");
+    return sameName(strip(left), strip(right));
+  };
+  var dateChunk = () => /\b(?:bef|before|abt|about|aft|after|cir|circa|est|cal)\.?\s+\d{4}\b|\b\d{1,2}\s+[a-z]{3,}\.?\s+\d{4}\b|\b[a-z]{3,}\.?\s+\d{4}\b|\b\d{1,2}[./-]\d{1,2}[./-]\d{4}\b|\b\d{4}\b/gi;
+  var factDates = (value) => {
+    const found = collapse(value).match(dateChunk()) ?? [];
+    return [...new Set(found.map((part) => part.trim()))];
+  };
+  var factDatePhrase = (value) => factDates(value)[0];
+  var splitPersonName = (name) => {
+    const words = collapse(name).split(" ").filter(Boolean);
+    let suffix = "";
+    const last = words[words.length - 1]?.replace(/\./g, "").toLocaleLowerCase();
+    if (words.length > 1 && last && NAME_SUFFIX.has(last)) {
+      suffix = words.pop() ?? "";
+    }
+    if (words.length <= 1) {
+      return { given: words[0] ?? "", surname: "", suffix };
+    }
+    const surname = words.pop() ?? "";
+    return { given: words.join(" "), surname, suffix };
+  };
+  var splitWebLink = (value) => {
+    const url = factUrls(value)[0];
+    if (!url) {
+      return {};
+    }
+    const name = collapse(value).replace(/https?:\/\/\S+/gi, " ").replace(/[·•,]+/g, " ").replace(/\s+/g, " ").trim();
+    return { url, name: name || void 0 };
+  };
+  var PLACE_COUNTRY = /^(hungary|magyarorszag|romania|russia|ussr|soviet union|szovjetunio|germany|nemetorszag|austria|ausztria|slovakia|szlovakia|ukraine|ukrajna|poland|lengyelorszag|united states|usa|czechoslovakia|csehszlovakia|yugoslavia|jugoszlavia|serbia|szerbia|croatia|horvatorszag|italy|olaszorszag|france|franciaorszag|england|anglia|united kingdom)$/;
+  var dedupedParts = (parts) => {
+    for (let size = 1; size <= parts.length / 2; size += 1) {
+      if (parts.length % size !== 0) {
+        continue;
+      }
+      const cycle = parts.slice(0, size).map((part) => foldName(part));
+      const repeated = parts.every((part, index) => foldName(part) === cycle[index % size]);
+      if (repeated) {
+        return parts.slice(0, size);
+      }
+    }
+    return parts;
+  };
+  var splitFactValue = (value) => {
+    const date = factDatePhrase(value);
+    let rest = collapse(value).replace(/[•·]/g, ",");
+    if (date) {
+      rest = rest.replace(date, " ");
+    }
+    rest = rest.replace(/\s+/g, " ").replace(/^[, ]+|[, ]+$/g, "").trim();
+    if (!rest) {
+      return { date };
+    }
+    const parts = dedupedParts(
+      rest.split(",").map((part) => part.trim()).filter(Boolean)
+    );
+    const countryAt = parts.findIndex((part) => PLACE_COUNTRY.test(foldName(part)));
+    if (countryAt >= 0) {
+      const description = parts.slice(countryAt + 1).join(", ");
+      return {
+        date,
+        place: parts.slice(0, countryAt + 1).join(", "),
+        description: description || void 0
+      };
+    }
+    if (parts.length >= 4) {
+      return {
+        date,
+        place: parts.slice(0, 3).join(", "),
+        description: parts.slice(3).join(", ") || void 0
+      };
+    }
+    if (parts.length === 1) {
+      return { date, description: parts[0] };
+    }
+    return { date, place: parts.join(", ") };
+  };
+  var withoutDates = (value) => collapse(value).replace(dateChunk(), " ").replace(/https?:\/\/\S+/gi, " ");
+  var factUrls = (value) => {
+    const found = collapse(value).match(/https?:\/\/[^\s]+/gi) ?? [];
+    return found.map((href2) => {
+      const trimmed = href2.replace(/[),.;]+$/g, "");
+      try {
+        const url = new URL(trimmed);
+        const decode = (part) => {
+          try {
+            return decodeURIComponent(part);
+          } catch {
+            return part;
+          }
+        };
+        const query = decode(url.search.replace(/^\?/, ""));
+        return `${url.origin}${decode(url.pathname)}${query ? `?${query}` : ""}`.replace(/\/$/, "");
+      } catch {
+        return trimmed.replace(/\/$/, "");
+      }
+    });
+  };
+  var sameFactValue = (left, right) => {
+    if (sameName(left, right)) {
+      return true;
+    }
+    const urlsLeft = factUrls(left);
+    const urlsRight = factUrls(right);
+    if (urlsLeft.length && urlsRight.length) {
+      if (!urlsLeft.some((href2) => urlsRight.includes(href2))) {
+        return false;
+      }
+      const leftover = (value) => foldName(collapse(value).replace(/https?:\/\/\S+/gi, " "));
+      const leftName = leftover(left);
+      const rightName = leftover(right);
+      if (!leftName || !rightName) {
+        return true;
+      }
+      return leftName === rightName || leftName.includes(rightName) || rightName.includes(leftName);
+    }
+    const datesLeft = factDates(left);
+    const datesRight = factDates(right);
+    if (datesLeft.length && datesRight.length && !datesLeft.some((date) => datesRight.some((other) => sameDate(date, other)))) {
+      return false;
+    }
+    const textLeft = foldName(withoutDates(left));
+    const textRight = foldName(withoutDates(right));
+    if (!textLeft || !textRight) {
+      return Boolean(datesLeft.length && datesRight.length);
+    }
+    return textLeft === textRight || textLeft.includes(textRight) || textRight.includes(textLeft);
+  };
+  var sameFactText = (left, right) => {
+    const textLeft = foldName(withoutDates(left));
+    const textRight = foldName(withoutDates(right));
+    if (!textLeft || !textRight) {
+      return false;
+    }
+    return textLeft === textRight || textLeft.includes(textRight) || textRight.includes(textLeft);
+  };
+  var diffFactValues = (siteFacts2, treeFacts, treeWritable) => {
+    const titles = /* @__PURE__ */ new Map();
+    for (const fact of [...siteFacts2, ...treeFacts]) {
+      const key = factTitleKey(fact.title);
+      if (key && !titles.has(key)) {
+        titles.set(key, fact.title);
+      }
+    }
+    const diffs = [];
+    for (const [key, title] of titles) {
+      const siteValues = siteFacts2.filter((fact) => factTitleKey(fact.title) === key).map((fact) => fact.value);
+      const treeValues = treeFacts.filter((fact) => factTitleKey(fact.title) === key).map((fact) => fact.value);
+      const unmatchedSite = siteValues.filter(
+        (value) => !treeValues.some((treeValue2) => sameFactValue(treeValue2, value))
+      );
+      const unmatchedTree = treeValues.filter(
+        (value) => !siteValues.some((siteValue2) => sameFactValue(siteValue2, value))
+      );
+      const used = /* @__PURE__ */ new Set();
+      for (const site of unmatchedSite) {
+        const index = unmatchedTree.findIndex(
+          (treeValue2, treeIndex) => !used.has(treeIndex) && sameFactText(site, treeValue2)
+        );
+        if (index >= 0) {
+          used.add(index);
+          diffs.push({
+            key: "fact",
+            label: title,
+            site,
+            treeviz: unmatchedTree[index],
+            writable: treeWritable
+          });
+          continue;
+        }
+        diffs.push({ key: "fact", label: title, site, writable: false });
+      }
+      unmatchedTree.forEach((treeValue2, index) => {
+        if (used.has(index)) {
+          return;
+        }
+        diffs.push({
+          key: "fact",
+          label: title,
+          treeviz: treeValue2,
+          writable: treeWritable
+        });
+      });
+    }
+    return diffs;
   };
   var sameText = (left, right) => collapse(left).toLocaleLowerCase() === collapse(right).toLocaleLowerCase();
   var parseLooseDate = (value) => {
@@ -266,6 +460,11 @@
   };
   var ancestryDateForInput = (value) => {
     const parsed = parseLooseDate(value);
+    const qualifier = collapse(value).match(
+      /^(bef|before|abt|about|aft|after|cir|circa|est|cal)\b\.?/i
+    )?.[0];
+    const lead = qualifier ? qualifier.replace(/\.$/, "") : "";
+    const withLead = (body) => lead ? `${lead} ${body}` : body;
     if (!parsed) {
       return collapse(value);
     }
@@ -285,12 +484,12 @@
       "Dec"
     ];
     if (parsed.d && parsed.m) {
-      return `${parsed.d} ${month[parsed.m]} ${parsed.y}`;
+      return withLead(`${parsed.d} ${month[parsed.m]} ${parsed.y}`);
     }
     if (parsed.m) {
-      return `${month[parsed.m]} ${parsed.y}`;
+      return withLead(`${month[parsed.m]} ${parsed.y}`);
     }
-    return String(parsed.y);
+    return withLead(String(parsed.y));
   };
 
   // extensions/treeviz-connector/src/log.ts
@@ -380,12 +579,18 @@
     return Array.from(doc.querySelectorAll("#researchListFacts li.researchListItem")).map(
       (node) => {
         const root = node;
+        const date = root.querySelector(".factItemDate")?.textContent?.trim() || "";
+        const place = root.querySelector(".factItemLocation")?.textContent?.trim() || "";
+        const subtitle = root.querySelector(".userCardSubTitle")?.textContent?.trim() || "";
+        const wraps = Array.from(root.querySelectorAll(".textWrap")).map((item) => item.textContent?.trim() || "").filter(Boolean);
+        const lines2 = [date, place, subtitle, ...wraps].filter(Boolean);
         return {
           root,
           title: root.querySelector(".userCardTitle")?.textContent?.trim() || "",
-          date: root.querySelector(".factItemDate")?.textContent?.trim() || "",
-          place: root.querySelector(".factItemLocation")?.textContent?.trim() || "",
-          subtitle: root.querySelector(".userCardSubTitle")?.textContent?.trim() || Array.from(root.querySelectorAll(".textWrap")).map((item) => item.textContent?.trim() || "").filter(Boolean).join(", ")
+          date,
+          place,
+          subtitle: subtitle || wraps.join(", "),
+          lines: lines2
         };
       }
     );
@@ -395,7 +600,7 @@
     if (!titleMatches(card.title, type)) {
       return false;
     }
-    const dateOk = !date || sameDate(card.date, date) || sameText(card.date, date);
+    const dateOk = !date || sameDate(card.date, date) || sameText(card.date, date) || card.lines.some((line) => sameDate(line, date) || sameText(line, date));
     const placeOk = !place || sameText(card.place, place);
     return dateOk && placeOk;
   });
@@ -408,6 +613,16 @@
     input.dispatchEvent(
       new FocusEvent("focusout", { bubbles: true, cancelable: true })
     );
+  };
+  var descriptionControl = (fact) => {
+    const named = fact.querySelector(
+      "textarea#description, textarea[name='description'], input#description, input[name='description']"
+    );
+    if (named instanceof HTMLInputElement || named instanceof HTMLTextAreaElement) {
+      return named;
+    }
+    const area = fact.querySelector("textarea");
+    return area instanceof HTMLTextAreaElement ? area : null;
   };
   var waitFor = async (read, kick, timeoutMs) => {
     const existing = read();
@@ -455,9 +670,9 @@
       () => {
         const fact = document.querySelector("#FactEditComponent")?.closest(".modalFlex");
         const date = fact?.querySelector("input#date");
-        const location2 = fact?.querySelector("input#location");
-        if (fact?.classList.contains("open") && date && location2) {
-          return { fact, date, location: location2 };
+        if (fact?.classList.contains("open") && date) {
+          const location2 = fact.querySelector("input#location");
+          return { fact, date, location: location2, description: descriptionControl(fact) };
         }
         return void 0;
       },
@@ -468,7 +683,16 @@
       setInput(modal.date, ancestryDateForInput(to.date));
     }
     if (to.place) {
+      if (!modal.location) {
+        throw new Error("no-place");
+      }
       setInput(modal.location, to.place);
+    }
+    if (to.description) {
+      if (!modal.description) {
+        throw new Error("no-description");
+      }
+      setInput(modal.description, to.description);
     }
     const save = await waitFor(
       () => {
@@ -526,6 +750,237 @@
     const cards = readAncestryCards(document);
     return facts.filter((fact) => !findCard(cards, fact.type, fact.from.date, fact.from.place)).map((fact) => fact.type);
   };
+  var sameUrl = (left, right) => {
+    const a = factUrls(left)[0];
+    const b = factUrls(right)[0];
+    return Boolean(a && b && a === b);
+  };
+  var readWebLinkCards = (doc) => Array.from(doc.querySelectorAll("li.researchListItem")).flatMap((node) => {
+    if (!(node instanceof HTMLElement)) {
+      return [];
+    }
+    if (node.closest("#researchListFacts") || node.closest("#familySection")) {
+      return [];
+    }
+    const anchor = node.querySelector("a[href]");
+    if (!(anchor instanceof HTMLAnchorElement)) {
+      return [];
+    }
+    let url = "";
+    try {
+      url = new URL(anchor.href).toString();
+    } catch {
+      return [];
+    }
+    if (/ancestry\.|myheritage\./i.test(new URL(url).hostname)) {
+      return [];
+    }
+    return [
+      {
+        root: node,
+        name: node.querySelector(".userCardTitle")?.textContent?.trim() || "",
+        url
+      }
+    ];
+  });
+  var linkName = (url, name) => {
+    const trimmed = name?.trim();
+    if (trimmed) {
+      return trimmed.slice(0, 64);
+    }
+    try {
+      return new URL(url).hostname.slice(0, 64);
+    } catch {
+      return url.slice(0, 64);
+    }
+  };
+  var writeAncestryWebLink = async (link) => {
+    const url = link.url.trim().slice(0, 256);
+    if (!url) {
+      return ["no-url"];
+    }
+    const current2 = link.fromUrl ? readWebLinkCards(document).find((card) => sameUrl(card.url, link.fromUrl)) : void 0;
+    if (link.fromUrl && !current2) {
+      return ["missing"];
+    }
+    const openButton = current2 ? current2.root.querySelector("button.cardAction") : document.querySelector("#addWebLinkBtn");
+    if (!openButton) {
+      return ["no-link"];
+    }
+    const modal = await waitFor(
+      () => {
+        const form = document.querySelector("#webLinkForm")?.closest(".modalFlex");
+        const field = form?.querySelector("#webLink");
+        if (form?.classList.contains("open") && field instanceof HTMLInputElement) {
+          const nameField = form.querySelector("#webLinkName");
+          return {
+            form,
+            field,
+            nameField: nameField instanceof HTMLInputElement ? nameField : null
+          };
+        }
+        return void 0;
+      },
+      () => openButton.click(),
+      5e3
+    );
+    setInput(modal.field, url);
+    if (modal.nameField && (link.name || !current2)) {
+      setInput(modal.nameField, linkName(url, link.name));
+    }
+    let save;
+    try {
+      save = await waitFor(
+        () => {
+          const button = modal.form.querySelector("#submitWeblink");
+          return button instanceof HTMLButtonElement && !button.disabled ? button : void 0;
+        },
+        () => void 0,
+        4e3
+      );
+    } catch {
+      modal.form.querySelector("button.modalClose, #cancelWeblink")?.click();
+      return ["unchanged"];
+    }
+    await waitFor(
+      () => modal.form.querySelector("#submitWeblink[disabled]"),
+      () => save.click(),
+      8e3
+    );
+    modal.form.querySelector("button.modalClose")?.click();
+    return [];
+  };
+  var relationFor = (key, sex) => {
+    if (key === "spouses") {
+      return "Spouse";
+    }
+    if (key === "parents") {
+      return sex === "F" ? "Mother" : "Father";
+    }
+    return sex === "F" ? "Daughter" : "Son";
+  };
+  var closeRelativeForm = () => {
+    document.querySelector("#cancelAddNew, #cancelChooseExisting, #closeAddNew")?.click();
+  };
+  var openRelativeForm = async (relation) => {
+    const ready2 = () => document.querySelector("#addNewForm, #chooseExistingForm") ?? void 0;
+    const slot = document.querySelector(`#add${relation}CardBtn`);
+    if (slot instanceof HTMLElement) {
+      await waitFor(ready2, () => slot.click(), 5e3);
+      return;
+    }
+    const menu = document.querySelector("#addFamilyBtn");
+    if (!(menu instanceof HTMLButtonElement)) {
+      throw new Error(relation === "Father" || relation === "Mother" ? "no-parent" : "no-role");
+    }
+    const item = await waitFor(
+      () => document.querySelector(`#add${relation}CalloutBtn`),
+      () => menu.click(),
+      4e3
+    ).catch(() => void 0);
+    if (!item) {
+      throw new Error(relation === "Father" || relation === "Mother" ? "no-parent" : "no-role");
+    }
+    await waitFor(ready2, () => item.click(), 5e3);
+  };
+  var suggestionFor = (name) => Array.from(document.querySelectorAll(".autocompleteCon.autocompleteVisible li, .autocompleteCon.autocompleteVisible a, .autocompleteCon.autocompleteVisible button")).find(
+    (node) => node instanceof HTMLElement && node.getBoundingClientRect().height > 0 && samePersonName(node.textContent ?? "", name)
+  );
+  var saveRelative = async (selector) => {
+    const button = await waitFor(
+      () => {
+        const found = document.querySelector(selector);
+        return found instanceof HTMLButtonElement && !found.disabled ? found : void 0;
+      },
+      () => void 0,
+      4e3
+    );
+    await waitFor(
+      () => document.querySelector("#addNewForm, #chooseExistingForm") ? void 0 : document.body,
+      () => button.click(),
+      8e3
+    );
+  };
+  var linkExistingRelative = async (name) => {
+    const fromTree = document.querySelector("#fromYourTreeRadio");
+    if (!(fromTree instanceof HTMLInputElement)) {
+      return false;
+    }
+    fromTree.click();
+    const input = await waitFor(
+      () => document.querySelector("#apmFindExistingPerson"),
+      () => void 0,
+      3e3
+    ).catch(() => void 0);
+    if (!input) {
+      return false;
+    }
+    setInput(input, name);
+    const suggestion = await waitFor(() => suggestionFor(name), () => void 0, 2e3).catch(
+      () => void 0
+    );
+    if (!suggestion) {
+      document.querySelector("#newPersonRadio")?.click();
+      await waitFor(
+        () => document.querySelector("#fname") ?? void 0,
+        () => void 0,
+        3e3
+      );
+      return false;
+    }
+    suggestion.click();
+    await saveRelative("#saveChooseExisting");
+    return true;
+  };
+  var createRelative = async (person) => {
+    const { given, surname, suffix } = splitPersonName(person.name);
+    const first = await waitFor(
+      () => {
+        const field = document.querySelector("#fname");
+        return field instanceof HTMLInputElement ? field : void 0;
+      },
+      () => document.querySelector("#newPersonRadio")?.click(),
+      4e3
+    );
+    const last = document.querySelector("#lname");
+    const suffixField = document.querySelector("#sufname");
+    setInput(first, given || surname);
+    if (last instanceof HTMLInputElement) {
+      setInput(last, given ? surname : "");
+    }
+    if (suffix && suffixField instanceof HTMLInputElement) {
+      setInput(suffixField, suffix);
+    }
+    const genderId = person.sex === "F" ? "m_genderFemale" : person.sex === "M" ? "m_genderMale" : "m_genderPerson";
+    document.querySelector(`#${genderId}`)?.click();
+    await saveRelative("#saveAddNew");
+  };
+  var addOneRelative = async (key, person) => {
+    await openRelativeForm(relationFor(key, person.sex));
+    const linked = await linkExistingRelative(person.name).catch(() => false);
+    if (linked) {
+      return;
+    }
+    await createRelative(person);
+  };
+  var writeAncestryRelatives = async (key, people) => {
+    const errors = [];
+    for (const person of people) {
+      if (!person.name.trim()) {
+        continue;
+      }
+      try {
+        await addOneRelative(key, person);
+        await new Promise((resolve) => window.setTimeout(resolve, 800));
+      } catch (error) {
+        closeRelativeForm();
+        const message = error instanceof Error ? error.message : "failed";
+        connectorLog("ancestry", "relative add failed", { name: person.name, message });
+        errors.push(message === "no-parent" ? "no-parent" : `${person.name}: ${message}`);
+      }
+    }
+    return errors;
+  };
 
   // extensions/treeviz-connector/src/i18n.ts
   var HU = {
@@ -548,6 +1003,8 @@
     treeClosed: "Nyisd meg ezt a f\xE1t a TreeVizben, azt\xE1n pr\xF3b\xE1ld \xFAjra.",
     ambiguous: "T\xF6bb ilyen nev\u0171 szem\xE9ly van a f\xE1ban: {{names}}",
     relativesNotWritten: "Rokont ezen az elrendez\xE9sen m\xE9g nem \xEDr a forr\xE1s oldalra.",
+    noParentSlot: "Mindk\xE9t sz\xFCl\u0151 helye foglalt az Ancestryn.",
+    siteNamesPresent: "Az oldalon m\xE1r szerepel minden n\xE9v.",
     warning: "A m\xF3dos\xEDt\xE1s az oldalon marad. A TreeViz nem tudja visszavonni. Csak a bejel\xF6lt mez\u0151k \xEDr\xF3dnak.",
     layout: "Ezt az oldal-elrendez\xE9st a TreeViz Connector nem ismeri, ez\xE9rt nem \xEDr.",
     noDiff: "A TreeViz \xE9s az oldal adatai egyeznek.",
@@ -608,6 +1065,8 @@
     treeClosed: "Open this tree in TreeViz, then try again.",
     ambiguous: "More than one person in the tree has this name: {{names}}",
     relativesNotWritten: "Relatives are not written to the source site on this layout.",
+    noParentSlot: "Both parent slots are already filled on Ancestry.",
+    siteNamesPresent: "Every name is already on the page.",
     warning: "The change stays on this site. TreeViz cannot undo it. Only checked fields are written.",
     layout: "TreeViz Connector does not know this page layout, so it will not write.",
     noDiff: "TreeViz and this site match.",
@@ -668,6 +1127,8 @@
     treeClosed: "\xD6ffne diesen Baum in TreeViz, und versuch es noch einmal.",
     ambiguous: "Mehr als eine Person im Baum hat diesen Namen: {{names}}",
     relativesNotWritten: "Verwandte werden in diesem Layout nicht auf die Quellseite geschrieben.",
+    noParentSlot: "Beide Elternpl\xE4tze sind bei Ancestry schon belegt.",
+    siteNamesPresent: "Jeder Name steht schon auf der Seite.",
     warning: "Die \xC4nderung bleibt auf dieser Seite. TreeViz kann sie nicht r\xFCckg\xE4ngig machen. Nur die markierten Felder werden geschrieben.",
     layout: "TreeViz Connector kennt dieses Seitenlayout nicht und schreibt deshalb nicht.",
     noDiff: "TreeViz und diese Seite stimmen \xFCberein.",
@@ -728,6 +1189,8 @@
     treeClosed: "Ouvre cet arbre dans TreeViz, puis r\xE9essaie.",
     ambiguous: "Plus d'une personne dans l'arbre porte ce nom : {{names}}",
     relativesNotWritten: "Les proches ne sont pas \xE9crits sur le site source avec cette mise en page.",
+    noParentSlot: "Les deux places de parents sont d\xE9j\xE0 prises sur Ancestry.",
+    siteNamesPresent: "Tous les noms sont d\xE9j\xE0 sur la page.",
     warning: "La modification reste sur ce site. TreeViz ne peut pas l'annuler. Seuls les champs coch\xE9s sont \xE9crits.",
     layout: "TreeViz Connector ne conna\xEEt pas cette mise en page, donc il n'\xE9crit pas.",
     noDiff: "TreeViz et ce site correspondent.",
@@ -788,6 +1251,8 @@
     treeClosed: "Abre este \xE1rbol en TreeViz y vuelve a intentarlo.",
     ambiguous: "M\xE1s de una persona del \xE1rbol tiene este nombre: {{names}}",
     relativesNotWritten: "Los parientes no se escriben en el sitio de origen con este dise\xF1o.",
+    noParentSlot: "Los dos lugares de padres ya est\xE1n ocupados en Ancestry.",
+    siteNamesPresent: "Todos los nombres ya est\xE1n en la p\xE1gina.",
     warning: "El cambio se queda en este sitio. TreeViz no puede deshacerlo. Solo se escriben los campos marcados.",
     layout: "TreeViz Connector no conoce este dise\xF1o de p\xE1gina, as\xED que no escribe.",
     noDiff: "TreeViz y este sitio coinciden.",
@@ -848,6 +1313,8 @@
     treeClosed: "\u041E\u0442\u043A\u0440\u043E\u0439 \u044D\u0442\u043E \u0434\u0435\u0440\u0435\u0432\u043E \u0432 TreeViz \u0438 \u043F\u043E\u043F\u0440\u043E\u0431\u0443\u0439 \u0441\u043D\u043E\u0432\u0430.",
     ambiguous: "\u0412 \u0434\u0435\u0440\u0435\u0432\u0435 \u0431\u043E\u043B\u044C\u0448\u0435 \u043E\u0434\u043D\u043E\u0433\u043E \u0447\u0435\u043B\u043E\u0432\u0435\u043A\u0430 \u0441 \u0442\u0430\u043A\u0438\u043C \u0438\u043C\u0435\u043D\u0435\u043C: {{names}}",
     relativesNotWritten: "\u0420\u043E\u0434\u0441\u0442\u0432\u0435\u043D\u043D\u0438\u043A\u043E\u0432 \u0432 \u044D\u0442\u043E\u0439 \u0440\u0430\u0441\u043A\u043B\u0430\u0434\u043A\u0435 \u043D\u0430 \u0441\u0430\u0439\u0442-\u0438\u0441\u0442\u043E\u0447\u043D\u0438\u043A \u043D\u0435 \u0437\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442.",
+    noParentSlot: "\u041E\u0431\u0430 \u043C\u0435\u0441\u0442\u0430 \u0440\u043E\u0434\u0438\u0442\u0435\u043B\u0435\u0439 \u043D\u0430 Ancestry \u0443\u0436\u0435 \u0437\u0430\u043D\u044F\u0442\u044B.",
+    siteNamesPresent: "\u0412\u0441\u0435 \u0438\u043C\u0435\u043D\u0430 \u0443\u0436\u0435 \u0435\u0441\u0442\u044C \u043D\u0430 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0435.",
     warning: "\u0418\u0437\u043C\u0435\u043D\u0435\u043D\u0438\u0435 \u043E\u0441\u0442\u0430\u043D\u0435\u0442\u0441\u044F \u043D\u0430 \u044D\u0442\u043E\u043C \u0441\u0430\u0439\u0442\u0435. TreeViz \u043D\u0435 \u0441\u043C\u043E\u0436\u0435\u0442 \u0435\u0433\u043E \u043E\u0442\u043C\u0435\u043D\u0438\u0442\u044C. \u0417\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u044E\u0442\u0441\u044F \u0442\u043E\u043B\u044C\u043A\u043E \u043E\u0442\u043C\u0435\u0447\u0435\u043D\u043D\u044B\u0435 \u043F\u043E\u043B\u044F.",
     layout: "TreeViz Connector \u043D\u0435 \u0437\u043D\u0430\u0435\u0442 \u044D\u0442\u0443 \u0440\u0430\u0441\u043A\u043B\u0430\u0434\u043A\u0443 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u044B \u0438 \u043F\u043E\u044D\u0442\u043E\u043C\u0443 \u043D\u0435 \u0437\u0430\u043F\u0438\u0441\u044B\u0432\u0430\u0435\u0442.",
     noDiff: "TreeViz \u0438 \u044D\u0442\u043E\u0442 \u0441\u0430\u0439\u0442 \u0441\u043E\u0432\u043F\u0430\u0434\u0430\u044E\u0442.",
@@ -908,6 +1375,8 @@
     treeClosed: "\u3053\u306E\u5BB6\u7CFB\u56F3\u3092 TreeViz \u3067\u958B\u3044\u3066\u3001\u3082\u3046\u4E00\u5EA6\u8A66\u3057\u3066\u3002",
     ambiguous: "\u540C\u3058\u540D\u524D\u306E\u4EBA\u304C\u8907\u6570\u3044\u308B: {{names}}",
     relativesNotWritten: "\u3053\u306E\u30EC\u30A4\u30A2\u30A6\u30C8\u3067\u306F\u89AA\u65CF\u3092\u5143\u306E\u30B5\u30A4\u30C8\u306B\u66F8\u304D\u8FBC\u307E\u306A\u3044\u3002",
+    noParentSlot: "Ancestry\u3067\u306F\u4E21\u89AA\u306E\u6B04\u304C\u4E21\u65B9\u57CB\u307E\u3063\u3066\u3044\u308B\u3002",
+    siteNamesPresent: "\u3069\u306E\u540D\u524D\u3082\u30DA\u30FC\u30B8\u4E0A\u306B\u3059\u3067\u306B\u3042\u308B\u3002",
     warning: "\u5909\u66F4\u306F\u3053\u306E\u30B5\u30A4\u30C8\u306B\u6B8B\u308B\u3002TreeViz \u306F\u53D6\u308A\u6D88\u305B\u306A\u3044\u3002\u30C1\u30A7\u30C3\u30AF\u3057\u305F\u9805\u76EE\u3060\u3051\u66F8\u304D\u8FBC\u3080\u3002",
     layout: "TreeViz Connector \u306F\u3053\u306E\u30DA\u30FC\u30B8\u306E\u30EC\u30A4\u30A2\u30A6\u30C8\u3092\u77E5\u3089\u306A\u3044\u306E\u3067\u3001\u66F8\u304D\u8FBC\u307E\u306A\u3044\u3002",
     noDiff: "TreeViz \u3068\u3053\u306E\u30B5\u30A4\u30C8\u306F\u4E00\u81F4\u3057\u3066\u3044\u308B\u3002",
@@ -968,6 +1437,8 @@
     treeClosed: "\u5728 TreeViz \u91CC\u6253\u5F00\u8FD9\u4E2A\u5BB6\u8C31\uFF0C\u7136\u540E\u518D\u8BD5\u4E00\u6B21\u3002",
     ambiguous: "\u5BB6\u8C31\u91CC\u6709\u4E0D\u6B62\u4E00\u4E2A\u540C\u540D\u7684\u4EBA\uFF1A{{names}}",
     relativesNotWritten: "\u8FD9\u79CD\u7248\u5F0F\u4E0D\u4F1A\u628A\u4EB2\u5C5E\u5199\u56DE\u6E90\u7F51\u7AD9\u3002",
+    noParentSlot: "Ancestry \u4E0A\u7684\u7236\u6BCD\u4F4D\u7F6E\u90FD\u5DF2\u5360\u7528\u3002",
+    siteNamesPresent: "\u9875\u9762\u4E0A\u5DF2\u7ECF\u6709\u8FD9\u4E9B\u540D\u5B57\u3002",
     warning: "\u4FEE\u6539\u4F1A\u7559\u5728\u8FD9\u4E2A\u7F51\u7AD9\u4E0A\u3002TreeViz \u4E0D\u80FD\u64A4\u9500\u3002\u53EA\u4F1A\u5199\u5165\u52FE\u9009\u7684\u5B57\u6BB5\u3002",
     layout: "TreeViz Connector \u4E0D\u8BA4\u8BC6\u8FD9\u4E2A\u9875\u9762\u7248\u5F0F\uFF0C\u6240\u4EE5\u4E0D\u4F1A\u5199\u5165\u3002",
     noDiff: "TreeViz \u548C\u8FD9\u4E2A\u7F51\u7AD9\u4E00\u81F4\u3002",
@@ -2164,13 +2635,76 @@ ${body}`;
     };
   };
   var LIFE_FACT = /^(birth|szuletes|death|halal|marriage|hazassag|baptism|burial|christening|gender|sex|name|nev|nem)\b/;
+  var CHROME_FACT = /possible marriage|^add fact$|^sources$|^web links$/;
+  var splitStuckTitle = (title) => {
+    const match = title.match(/^([A-Za-z][A-Za-z \-/]*?)(\d.*)$/);
+    if (!match) {
+      return { title };
+    }
+    return { title: match[1].trim(), extra: match[2].trim() };
+  };
+  var factLines = (parts) => {
+    const kept = [];
+    for (const part of parts) {
+      const text = part.trim();
+      const key = foldName(text);
+      if (!key) {
+        continue;
+      }
+      const index = kept.findIndex((item) => {
+        const other = foldName(item);
+        return other.includes(key) || key.includes(other);
+      });
+      if (index === -1) {
+        kept.push(text);
+        continue;
+      }
+      if (text.length > kept[index].length) {
+        kept[index] = text;
+      }
+    }
+    return kept.join(", ");
+  };
+  var readWebLinks = () => {
+    const root = document.querySelector("main") ?? document.body;
+    const facts = [];
+    const seen = /* @__PURE__ */ new Set();
+    root.querySelectorAll("a[href]").forEach((node) => {
+      if (!(node instanceof HTMLAnchorElement) || node.closest("#treeviz-connector-root")) {
+        return;
+      }
+      let url;
+      try {
+        url = new URL(node.href);
+      } catch {
+        return;
+      }
+      if (!/^https?:$/.test(url.protocol)) {
+        return;
+      }
+      if (/ancestry\.|myheritage\./i.test(url.hostname)) {
+        return;
+      }
+      const value = url.toString().replace(/\/$/, "");
+      if (seen.has(value)) {
+        return;
+      }
+      seen.add(value);
+      facts.push({ title: "Web Address", value });
+    });
+    return facts;
+  };
   var readPageFacts = () => {
     const facts = [];
     const seen = /* @__PURE__ */ new Set();
     const push = (title, value) => {
-      const cleanTitle = title.trim();
-      const cleanValue = value.trim();
+      const split = splitStuckTitle(title.trim());
+      const cleanTitle = split.title;
+      const cleanValue = factLines([split.extra || "", value]);
       if (!cleanTitle || !cleanValue || LIFE_FACT.test(foldName(cleanTitle))) {
+        return;
+      }
+      if (CHROME_FACT.test(foldName(cleanTitle))) {
         return;
       }
       const id = `${factTitleKey(cleanTitle)}|${foldName(cleanValue)}`;
@@ -2181,40 +2715,17 @@ ${body}`;
       facts.push({ title: cleanTitle, value: cleanValue });
     };
     for (const card of readAncestryCards(document)) {
-      push(card.title, [card.subtitle, card.date, card.place].filter(Boolean).join(", "));
+      push(card.title, factLines(card.lines));
     }
     for (const fact of readLooseFacts(document, relationshipsRoot())) {
       push(fact.title, fact.value);
     }
+    for (const link of readWebLinks()) {
+      push(link.title, link.value);
+    }
     return facts;
   };
-  var factDiffs = (siteFacts2, treeFacts) => {
-    const titles = /* @__PURE__ */ new Map();
-    for (const fact of [...siteFacts2, ...treeFacts]) {
-      const key = factTitleKey(fact.title);
-      if (key && !titles.has(key)) {
-        titles.set(key, fact.title);
-      }
-    }
-    const diffs = [];
-    for (const [key, title] of titles) {
-      const siteValues = siteFacts2.filter((fact) => factTitleKey(fact.title) === key).map((fact) => fact.value);
-      const treeValues = treeFacts.filter((fact) => factTitleKey(fact.title) === key).map((fact) => fact.value);
-      for (const value of siteValues) {
-        if (treeValues.some((treeValue2) => sameName(treeValue2, value))) {
-          continue;
-        }
-        diffs.push({ key: "fact", label: title, site: value, writable: false });
-      }
-      for (const value of treeValues) {
-        if (siteValues.some((siteValue2) => sameName(siteValue2, value))) {
-          continue;
-        }
-        diffs.push({ key: "fact", label: title, treeviz: value, writable: false });
-      }
-    }
-    return diffs;
-  };
+  var factDiffs = (siteFacts2, treeFacts) => diffFactValues(siteFacts2, treeFacts, false);
   var treeRelatives = (tree, ids) => (ids ?? []).map((id) => {
     const found = personIn(tree, id);
     const sex = found?.sex === "M" || found?.sex === "F" ? found.sex : void 0;
@@ -2223,13 +2734,13 @@ ${body}`;
   var sexWord = (sex) => sex === "F" ? t("female") : sex === "M" ? t("male") : "";
   var relativeDiff = (key, sitePeople, treePeople) => {
     const siteOnly = sitePeople.filter(
-      (sitePerson) => !treePeople.some((treePerson) => sameName(treePerson.name, sitePerson.name))
+      (sitePerson) => !treePeople.some((treePerson) => samePersonName(treePerson.name, sitePerson.name))
     );
     const treeOnly = treePeople.filter(
-      (treePerson) => !sitePeople.some((sitePerson) => sameName(sitePerson.name, treePerson.name))
+      (treePerson) => !sitePeople.some((sitePerson) => samePersonName(sitePerson.name, treePerson.name))
     );
     const sexMismatch = sitePeople.filter((sitePerson) => {
-      const match = treePeople.find((treePerson) => sameName(treePerson.name, sitePerson.name));
+      const match = treePeople.find((treePerson) => samePersonName(treePerson.name, sitePerson.name));
       return Boolean(match && sitePerson.sex && match.sex !== sitePerson.sex);
     });
     if (!siteOnly.length && !treeOnly.length && !sexMismatch.length) {
@@ -2330,6 +2841,7 @@ ${body}`;
       factsKnown,
       diffs: diffs.map((diff) => ({
         key: diff.key,
+        label: diff.label,
         site: diff.site,
         treeviz: diff.treeviz,
         writable: diff.writable
@@ -2347,11 +2859,86 @@ ${body}`;
       layoutKnown: site.layoutKnown,
       onUpdateSite: (diff) => {
         if (diff.key === "parents" || diff.key === "spouses" || diff.key === "children") {
-          patchPanel({ status: t("relativesNotWritten") });
+          const key = diff.key;
+          const sitePeople = key === "parents" ? relatives.parents : key === "spouses" ? relatives.spouses : relatives.children;
+          const treePeople = treeRelatives(
+            tree,
+            key === "parents" ? person.parentIds : key === "spouses" ? person.spouseIds : person.childIds
+          );
+          const missing = treePeople.filter(
+            (treePerson) => !sitePeople.some(
+              (sitePerson) => samePersonName(sitePerson.name, treePerson.name)
+            )
+          );
+          if (!missing.length) {
+            patchPanel({ status: t("siteNamesPresent") });
+            return;
+          }
+          patchPanel({ busy: true, status: t("update") });
+          void writeAncestryRelatives(key, missing).then((errors) => {
+            const noParent = errors.includes("no-parent");
+            patchPanel({
+              busy: false,
+              status: !errors.length ? t("wrote") : noParent ? t("noParentSlot") : `${t("failed")} ${errors.join(", ")}`
+            });
+            if (!errors.length) {
+              showTree(tree, personId, cachedAt);
+            }
+          });
+          return;
+        }
+        if (diff.key === "fact" && factTitleKey(diff.label) === "web address") {
+          const target = splitWebLink(diff.treeviz);
+          if (!target.url) {
+            patchPanel({ status: t("factNotWritten") });
+            return;
+          }
+          patchPanel({ busy: true, status: t("update") });
+          void writeAncestryWebLink({
+            url: target.url,
+            name: target.name,
+            fromUrl: splitWebLink(diff.site).url
+          }).then((errors) => {
+            const unchanged = errors.length > 0 && errors.every((error) => error === "unchanged");
+            patchPanel({
+              busy: false,
+              status: !errors.length ? t("wrote") : unchanged ? t("factNotWritten") : `${t("failed")} ${errors.join(", ")}`
+            });
+            if (!errors.length) {
+              showTree(tree, personId, cachedAt);
+            }
+          });
           return;
         }
         if (diff.key === "fact") {
-          patchPanel({ status: t("factNotWritten") });
+          const target = splitFactValue(diff.treeviz);
+          const current2 = splitFactValue(diff.site);
+          const toDate = target.date && !sameDate(target.date, current2.date) ? target.date : void 0;
+          const toPlace = target.place && foldName(target.place) !== foldName(current2.place) ? target.place : void 0;
+          const toDescription = target.description && !sameFactText(target.description, current2.description) ? target.description : void 0;
+          if (!diff.label || !toDate && !toPlace && !toDescription) {
+            patchPanel({ status: t("factNotWritten") });
+            return;
+          }
+          const update = {
+            type: diff.label,
+            from: { date: current2.date || factDatePhrase(diff.site) },
+            to: { date: toDate, place: toPlace, description: toDescription }
+          };
+          if (checkAncestryFacts([update]).length) {
+            patchPanel({ status: t("factNotWritten") });
+            return;
+          }
+          patchPanel({ busy: true, status: t("update") });
+          void writeAncestryFacts([update]).then((errors) => {
+            patchPanel({
+              busy: false,
+              status: errors.length ? `${t("failed")} ${errors.join(", ")}` : t("wrote")
+            });
+            if (!errors.length) {
+              showTree(tree, personId, cachedAt);
+            }
+          });
           return;
         }
         if (!writableOnAncestry(diff.key)) {

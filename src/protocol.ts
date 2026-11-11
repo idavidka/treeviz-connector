@@ -57,7 +57,7 @@ export type ConnectorIndex = {
 export type AncestryFactUpdate = {
 	type: string;
 	from: { date?: string; place?: string };
-	to: { date?: string; place?: string };
+	to: { date?: string; place?: string; description?: string };
 };
 
 export type AncestryBatchPerson = {

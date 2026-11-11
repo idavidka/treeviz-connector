@@ -18,6 +18,8 @@ const HU = {
 	treeClosed: "Nyisd meg ezt a fát a TreeVizben, aztán próbáld újra.",
 	ambiguous: "Több ilyen nevű személy van a fában: {{names}}",
 	relativesNotWritten: "Rokont ezen az elrendezésen még nem ír a forrás oldalra.",
+	noParentSlot: "Mindkét szülő helye foglalt az Ancestryn.",
+	siteNamesPresent: "Az oldalon már szerepel minden név.",
 	warning:
 		"A módosítás az oldalon marad. A TreeViz nem tudja visszavonni. Csak a bejelölt mezők íródnak.",
 	layout:
@@ -83,6 +85,8 @@ const EN: typeof HU = {
 	treeClosed: "Open this tree in TreeViz, then try again.",
 	ambiguous: "More than one person in the tree has this name: {{names}}",
 	relativesNotWritten: "Relatives are not written to the source site on this layout.",
+	noParentSlot: "Both parent slots are already filled on Ancestry.",
+	siteNamesPresent: "Every name is already on the page.",
 	warning:
 		"The change stays on this site. TreeViz cannot undo it. Only checked fields are written.",
 	layout: "TreeViz Connector does not know this page layout, so it will not write.",
@@ -147,6 +151,8 @@ const DE: typeof HU = {
 	treeClosed: "Öffne diesen Baum in TreeViz, und versuch es noch einmal.",
 	ambiguous: "Mehr als eine Person im Baum hat diesen Namen: {{names}}",
 	relativesNotWritten: "Verwandte werden in diesem Layout nicht auf die Quellseite geschrieben.",
+	noParentSlot: "Beide Elternplätze sind bei Ancestry schon belegt.",
+	siteNamesPresent: "Jeder Name steht schon auf der Seite.",
 	warning:
 		"Die Änderung bleibt auf dieser Seite. TreeViz kann sie nicht rückgängig machen. Nur die markierten Felder werden geschrieben.",
 	layout: "TreeViz Connector kennt dieses Seitenlayout nicht und schreibt deshalb nicht.",
@@ -211,6 +217,8 @@ const FR: typeof HU = {
 	treeClosed: "Ouvre cet arbre dans TreeViz, puis réessaie.",
 	ambiguous: "Plus d'une personne dans l'arbre porte ce nom : {{names}}",
 	relativesNotWritten: "Les proches ne sont pas écrits sur le site source avec cette mise en page.",
+	noParentSlot: "Les deux places de parents sont déjà prises sur Ancestry.",
+	siteNamesPresent: "Tous les noms sont déjà sur la page.",
 	warning:
 		"La modification reste sur ce site. TreeViz ne peut pas l'annuler. Seuls les champs cochés sont écrits.",
 	layout: "TreeViz Connector ne connaît pas cette mise en page, donc il n'écrit pas.",
@@ -275,6 +283,8 @@ const ES: typeof HU = {
 	treeClosed: "Abre este árbol en TreeViz y vuelve a intentarlo.",
 	ambiguous: "Más de una persona del árbol tiene este nombre: {{names}}",
 	relativesNotWritten: "Los parientes no se escriben en el sitio de origen con este diseño.",
+	noParentSlot: "Los dos lugares de padres ya están ocupados en Ancestry.",
+	siteNamesPresent: "Todos los nombres ya están en la página.",
 	warning:
 		"El cambio se queda en este sitio. TreeViz no puede deshacerlo. Solo se escriben los campos marcados.",
 	layout: "TreeViz Connector no conoce este diseño de página, así que no escribe.",
@@ -339,6 +349,8 @@ const RU: typeof HU = {
 	treeClosed: "Открой это дерево в TreeViz и попробуй снова.",
 	ambiguous: "В дереве больше одного человека с таким именем: {{names}}",
 	relativesNotWritten: "Родственников в этой раскладке на сайт-источник не записывает.",
+	noParentSlot: "Оба места родителей на Ancestry уже заняты.",
+	siteNamesPresent: "Все имена уже есть на странице.",
 	warning:
 		"Изменение останется на этом сайте. TreeViz не сможет его отменить. Записываются только отмеченные поля.",
 	layout: "TreeViz Connector не знает эту раскладку страницы и поэтому не записывает.",
@@ -403,6 +415,8 @@ const JA: typeof HU = {
 	treeClosed: "この家系図を TreeViz で開いて、もう一度試して。",
 	ambiguous: "同じ名前の人が複数いる: {{names}}",
 	relativesNotWritten: "このレイアウトでは親族を元のサイトに書き込まない。",
+	noParentSlot: "Ancestryでは両親の欄が両方埋まっている。",
+	siteNamesPresent: "どの名前もページ上にすでにある。",
 	warning:
 		"変更はこのサイトに残る。TreeViz は取り消せない。チェックした項目だけ書き込む。",
 	layout: "TreeViz Connector はこのページのレイアウトを知らないので、書き込まない。",
@@ -467,6 +481,8 @@ const ZH: typeof HU = {
 	treeClosed: "在 TreeViz 里打开这个家谱，然后再试一次。",
 	ambiguous: "家谱里有不止一个同名的人：{{names}}",
 	relativesNotWritten: "这种版式不会把亲属写回源网站。",
+	noParentSlot: "Ancestry 上的父母位置都已占用。",
+	siteNamesPresent: "页面上已经有这些名字。",
 	warning: "修改会留在这个网站上。TreeViz 不能撤销。只会写入勾选的字段。",
 	layout: "TreeViz Connector 不认识这个页面版式，所以不会写入。",
 	noDiff: "TreeViz 和这个网站一致。",

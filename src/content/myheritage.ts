@@ -1,4 +1,4 @@
-import { diffNameList, diffPerson, factTitleKey, parseLooseDate, sameName } from "../compare.js";
+import { diffFactValues, diffNameList, diffPerson, factTitleKey, parseLooseDate, sameName } from "../compare.js";
 import type { SiteFacts } from "../compare.js";
 import { languageReady, onLanguage, t } from "../i18n.js";
 import { connectorLog } from "../log.js";
@@ -392,37 +392,8 @@ const readEditorSections = (
 	return { facts, relatives };
 };
 
-const factListDiffs = (siteFacts: ConnectorFact[], treeFacts: ConnectorFact[]): FieldDiff[] => {
-	const titles = new Map<string, string>();
-	for (const fact of [...siteFacts, ...treeFacts]) {
-		const key = factTitleKey(fact.title);
-		if (key && !titles.has(key)) {
-			titles.set(key, fact.title);
-		}
-	}
-	const diffs: FieldDiff[] = [];
-	for (const [key, title] of titles) {
-		const siteValues = siteFacts
-			.filter((fact) => factTitleKey(fact.title) === key)
-			.map((fact) => fact.value);
-		const treeValues = treeFacts
-			.filter((fact) => factTitleKey(fact.title) === key)
-			.map((fact) => fact.value);
-		for (const value of siteValues) {
-			if (treeValues.some((treeValue) => sameName(treeValue, value))) {
-				continue;
-			}
-			diffs.push({ key: "fact", label: title, site: value, writable: false });
-		}
-		for (const value of treeValues) {
-			if (siteValues.some((siteValue) => sameName(siteValue, value))) {
-				continue;
-			}
-			diffs.push({ key: "fact", label: title, treeviz: value, writable: true });
-		}
-	}
-	return diffs;
-};
+const factListDiffs = (siteFacts: ConnectorFact[], treeFacts: ConnectorFact[]): FieldDiff[] =>
+	diffFactValues(siteFacts, treeFacts, true);
 
 const writable = (_key: FieldKey): boolean => true;
 
@@ -613,7 +584,6 @@ const showTree = (
 		const groups = [
 			["parents", person.parentIds],
 			["spouses", person.spouseIds],
-			["children", person.childIds],
 		] as const;
 		for (const [key, ids] of groups) {
 			const diff = diffNameList(key, sections.relatives[key], namesOf(ids));

@@ -1,4 +1,4 @@
-import type { ConnectorPerson, ConnectorSex, FieldDiff, FieldKey } from "./protocol.js";
+import type { ConnectorFact, ConnectorPerson, ConnectorSex, FieldDiff, FieldKey } from "./protocol.js";
 
 const MONTHS: Record<string, number> = {
 	jan: 1,
@@ -113,6 +113,11 @@ const FACT_TITLE_ALIASES: Record<string, string> = {
 	aka: "also known as",
 	"also known": "also known as",
 	"e mail": "email",
+	address: "residence",
+	employment: "occupation",
+	"military service": "military",
+	"web link": "web address",
+	"web links": "web address",
 };
 
 /** Same fact under Ancestry's label and the GEDCOM AKA token. */
@@ -133,16 +138,263 @@ export const sameName = (left?: string, right?: string): boolean => {
 	return a.split(" ").sort().join(" ") === b.split(" ").sort().join(" ");
 };
 
+const NAME_SUFFIX = new Set(["dr", "jr", "sr", "ii", "iii", "iv", "ifj", "phd", "md", "prof"]);
+
+/** Given name and surname. A trailing Dr or Jr does not make a different person. */
+export const samePersonName = (left?: string, right?: string): boolean => {
+	const strip = (value?: string) =>
+		foldName(value)
+			.split(" ")
+			.filter((word) => word && !NAME_SUFFIX.has(word))
+			.join(" ");
+	return sameName(strip(left), strip(right));
+};
+
+const dateChunk = (): RegExp =>
+	/\b(?:bef|before|abt|about|aft|after|cir|circa|est|cal)\.?\s+\d{4}\b|\b\d{1,2}\s+[a-z]{3,}\.?\s+\d{4}\b|\b[a-z]{3,}\.?\s+\d{4}\b|\b\d{1,2}[./-]\d{1,2}[./-]\d{4}\b|\b\d{4}\b/gi;
+
+const factDates = (value?: string): string[] => {
+	const found = collapse(value).match(dateChunk()) ?? [];
+	return [...new Set(found.map((part) => part.trim()))];
+};
+
+export const factDatePhrase = (value?: string): string | undefined => factDates(value)[0];
+
+/** First names, surname, and a trailing Dr or Jr. */
+export const splitPersonName = (
+	name: string
+): { given: string; surname: string; suffix: string } => {
+	const words = collapse(name).split(" ").filter(Boolean);
+	let suffix = "";
+	const last = words[words.length - 1]?.replace(/\./g, "").toLocaleLowerCase();
+	if (words.length > 1 && last && NAME_SUFFIX.has(last)) {
+		suffix = words.pop() ?? "";
+	}
+	if (words.length <= 1) {
+		return { given: words[0] ?? "", surname: "", suffix };
+	}
+	const surname = words.pop() ?? "";
+	return { given: words.join(" "), surname, suffix };
+};
+
+/** URL plus the words around it, such as a web link title. */
+export const splitWebLink = (value?: string): { url?: string; name?: string } => {
+	const url = factUrls(value)[0];
+	if (!url) {
+		return {};
+	}
+	const name = collapse(value)
+		.replace(/https?:\/\/\S+/gi, " ")
+		.replace(/[·•,]+/g, " ")
+		.replace(/\s+/g, " ")
+		.trim();
+	return { url, name: name || undefined };
+};
+
+const PLACE_COUNTRY =
+	/^(hungary|magyarorszag|romania|russia|ussr|soviet union|szovjetunio|germany|nemetorszag|austria|ausztria|slovakia|szlovakia|ukraine|ukrajna|poland|lengyelorszag|united states|usa|czechoslovakia|csehszlovakia|yugoslavia|jugoszlavia|serbia|szerbia|croatia|horvatorszag|italy|olaszorszag|france|franciaorszag|england|anglia|united kingdom)$/;
+
+const dedupedParts = (parts: string[]): string[] => {
+	for (let size = 1; size <= parts.length / 2; size += 1) {
+		if (parts.length % size !== 0) {
+			continue;
+		}
+		const cycle = parts.slice(0, size).map((part) => foldName(part));
+		const repeated = parts.every((part, index) => foldName(part) === cycle[index % size]);
+		if (repeated) {
+			return parts.slice(0, size);
+		}
+	}
+	return parts;
+};
+
+/** Date, then a city-county-country place, then the remaining description. */
+export const splitFactValue = (
+	value?: string
+): { date?: string; place?: string; description?: string } => {
+	const date = factDatePhrase(value);
+	let rest = collapse(value).replace(/[•·]/g, ",");
+	if (date) {
+		rest = rest.replace(date, " ");
+	}
+	rest = rest.replace(/\s+/g, " ").replace(/^[, ]+|[, ]+$/g, "").trim();
+	if (!rest) {
+		return { date };
+	}
+	const parts = dedupedParts(
+		rest
+			.split(",")
+			.map((part) => part.trim())
+			.filter(Boolean)
+	);
+	const countryAt = parts.findIndex((part) => PLACE_COUNTRY.test(foldName(part)));
+	if (countryAt >= 0) {
+		const description = parts.slice(countryAt + 1).join(", ");
+		return {
+			date,
+			place: parts.slice(0, countryAt + 1).join(", "),
+			description: description || undefined,
+		};
+	}
+	if (parts.length >= 4) {
+		return {
+			date,
+			place: parts.slice(0, 3).join(", "),
+			description: parts.slice(3).join(", ") || undefined,
+		};
+	}
+	if (parts.length === 1) {
+		return { date, description: parts[0] };
+	}
+	return { date, place: parts.join(", ") };
+};
+
+const withoutDates = (value?: string): string =>
+	collapse(value)
+		.replace(dateChunk(), " ")
+		.replace(/https?:\/\/\S+/gi, " ");
+
+export const factUrls = (value?: string): string[] => {
+	const found = collapse(value).match(/https?:\/\/[^\s]+/gi) ?? [];
+	return found.map((href) => {
+		const trimmed = href.replace(/[),.;]+$/g, "");
+		try {
+			const url = new URL(trimmed);
+			const decode = (part: string) => {
+				try {
+					return decodeURIComponent(part);
+				} catch {
+					return part;
+				}
+			};
+			const query = decode(url.search.replace(/^\?/, ""));
+			return `${url.origin}${decode(url.pathname)}${query ? `?${query}` : ""}`.replace(/\/$/, "");
+		} catch {
+			return trimmed.replace(/\/$/, "");
+		}
+	});
+};
+
+/** Same event when the date matches and either text contains the other. A repeated date counts once. */
+export const sameFactValue = (left?: string, right?: string): boolean => {
+	if (sameName(left, right)) {
+		return true;
+	}
+	const urlsLeft = factUrls(left);
+	const urlsRight = factUrls(right);
+	if (urlsLeft.length && urlsRight.length) {
+		if (!urlsLeft.some((href) => urlsRight.includes(href))) {
+			return false;
+		}
+		const leftover = (value?: string) =>
+			foldName(collapse(value).replace(/https?:\/\/\S+/gi, " "));
+		const leftName = leftover(left);
+		const rightName = leftover(right);
+		if (!leftName || !rightName) {
+			return true;
+		}
+		return (
+			leftName === rightName ||
+			leftName.includes(rightName) ||
+			rightName.includes(leftName)
+		);
+	}
+	const datesLeft = factDates(left);
+	const datesRight = factDates(right);
+	if (
+		datesLeft.length &&
+		datesRight.length &&
+		!datesLeft.some((date) => datesRight.some((other) => sameDate(date, other)))
+	) {
+		return false;
+	}
+	const textLeft = foldName(withoutDates(left));
+	const textRight = foldName(withoutDates(right));
+	if (!textLeft || !textRight) {
+		return Boolean(datesLeft.length && datesRight.length);
+	}
+	return textLeft === textRight || textLeft.includes(textRight) || textRight.includes(textLeft);
+};
+
+/** Same wording once the dates are removed, so one award with two years stays one row. */
+export const sameFactText = (left?: string, right?: string): boolean => {
+	const textLeft = foldName(withoutDates(left));
+	const textRight = foldName(withoutDates(right));
+	if (!textLeft || !textRight) {
+		return false;
+	}
+	return textLeft === textRight || textLeft.includes(textRight) || textRight.includes(textLeft);
+};
+
+export const diffFactValues = (
+	siteFacts: ConnectorFact[],
+	treeFacts: ConnectorFact[],
+	treeWritable: boolean
+): FieldDiff[] => {
+	const titles = new Map<string, string>();
+	for (const fact of [...siteFacts, ...treeFacts]) {
+		const key = factTitleKey(fact.title);
+		if (key && !titles.has(key)) {
+			titles.set(key, fact.title);
+		}
+	}
+	const diffs: FieldDiff[] = [];
+	for (const [key, title] of titles) {
+		const siteValues = siteFacts
+			.filter((fact) => factTitleKey(fact.title) === key)
+			.map((fact) => fact.value);
+		const treeValues = treeFacts
+			.filter((fact) => factTitleKey(fact.title) === key)
+			.map((fact) => fact.value);
+		const unmatchedSite = siteValues.filter(
+			(value) => !treeValues.some((treeValue) => sameFactValue(treeValue, value))
+		);
+		const unmatchedTree = treeValues.filter(
+			(value) => !siteValues.some((siteValue) => sameFactValue(siteValue, value))
+		);
+		const used = new Set<number>();
+		for (const site of unmatchedSite) {
+			const index = unmatchedTree.findIndex(
+				(treeValue, treeIndex) => !used.has(treeIndex) && sameFactText(site, treeValue)
+			);
+			if (index >= 0) {
+				used.add(index);
+				diffs.push({
+					key: "fact",
+					label: title,
+					site,
+					treeviz: unmatchedTree[index],
+					writable: treeWritable,
+				});
+				continue;
+			}
+			diffs.push({ key: "fact", label: title, site, writable: false });
+		}
+		unmatchedTree.forEach((treeValue, index) => {
+			if (used.has(index)) {
+				return;
+			}
+			diffs.push({
+				key: "fact",
+				label: title,
+				treeviz: treeValue,
+				writable: treeWritable,
+			});
+		});
+	}
+	return diffs;
+};
+
 export const diffNameList = (
 	key: FieldKey,
 	siteNames: string[],
 	treeNames: string[]
 ): FieldDiff | undefined => {
 	const unmatchedSite = siteNames.filter(
-		(siteName) => !treeNames.some((treeName) => sameName(siteName, treeName))
+		(siteName) => !treeNames.some((treeName) => samePersonName(siteName, treeName))
 	);
 	const unmatchedTree = treeNames.filter(
-		(treeName) => !siteNames.some((siteName) => sameName(siteName, treeName))
+		(treeName) => !siteNames.some((siteName) => samePersonName(siteName, treeName))
 	);
 	if (!unmatchedSite.length && !unmatchedTree.length) {
 		return undefined;
@@ -333,6 +585,11 @@ export const diffPerson = (
 
 export const ancestryDateForInput = (value?: string): string => {
 	const parsed = parseLooseDate(value);
+	const qualifier = collapse(value).match(
+		/^(bef|before|abt|about|aft|after|cir|circa|est|cal)\b\.?/i
+	)?.[0];
+	const lead = qualifier ? qualifier.replace(/\.$/, "") : "";
+	const withLead = (body: string) => (lead ? `${lead} ${body}` : body);
 	if (!parsed) {
 		return collapse(value);
 	}
@@ -352,10 +609,10 @@ export const ancestryDateForInput = (value?: string): string => {
 		"Dec",
 	];
 	if (parsed.d && parsed.m) {
-		return `${parsed.d} ${month[parsed.m]} ${parsed.y}`;
+		return withLead(`${parsed.d} ${month[parsed.m]} ${parsed.y}`);
 	}
 	if (parsed.m) {
-		return `${month[parsed.m]} ${parsed.y}`;
+		return withLead(`${month[parsed.m]} ${parsed.y}`);
 	}
-	return String(parsed.y);
+	return withLead(String(parsed.y));
 };
