@@ -62,11 +62,72 @@ const splitFactLine = (value?: string): { date?: string; place?: string } => {
 	return { place: value };
 };
 
+const profileHeading = (): HTMLElement | undefined => {
+	const heading = document.querySelector("h1");
+	return heading instanceof HTMLElement ? heading : undefined;
+};
+
+const headerName = (): string | undefined => {
+	const text = profileHeading()?.textContent?.replace(/\s+/g, " ").trim();
+	if (!text || text.length > 80) {
+		return undefined;
+	}
+	return text;
+};
+
+const headerBanner = (): HTMLElement | undefined => {
+	const heading = profileHeading();
+	let node = heading?.parentElement ?? undefined;
+	for (let depth = 0; node && depth < 6; depth += 1) {
+		if (node.querySelector("img") || getComputedStyle(node).backgroundImage !== "none") {
+			return node;
+		}
+		node = node.parentElement ?? undefined;
+	}
+	return heading?.parentElement ?? undefined;
+};
+
+const headerSex = (): "M" | "F" | undefined => {
+	const banner = headerBanner();
+	if (!banner) {
+		return undefined;
+	}
+	const chunks: string[] = [];
+	banner.querySelectorAll("*").forEach((node) => {
+		for (const name of ["aria-label", "title", "alt", "src", "class"]) {
+			const value = node.getAttribute(name);
+			if (value) {
+				chunks.push(value);
+			}
+		}
+		if (node instanceof HTMLElement) {
+			const image = getComputedStyle(node).backgroundImage;
+			if (image && image !== "none") {
+				chunks.push(image);
+			}
+		}
+	});
+	const blob = chunks.join(" ").toLocaleLowerCase();
+	const female =
+		/\b(female|woman|weiblich|mujer|femme|nő|no)\b/.test(blob) ||
+		/gender[_-]?f\b|silhouette[_-]f|iconfemale|_f_|\/f\//.test(blob);
+	const male =
+		/\b(male|man|männlich|hombre|homme|férfi|ferfi)\b/.test(blob) ||
+		/gender[_-]?m\b|silhouette[_-]m|iconmale|_m_|\/m\//.test(blob);
+	if (female && !male) {
+		return "F";
+	}
+	if (male && !female) {
+		return "M";
+	}
+	return undefined;
+};
+
 const siteFacts = (): SiteFacts => {
 	const layoutKnown = ancestryLayoutKnown(document);
 	const cards = readAncestryCards(document);
 	const name = cardText(cards, ["name", "név", "nev", "nom", "nombre"]);
-	const sex = cardText(cards, ["gender", "nem", "geschlecht", "sexe", "sexo"]);
+	const sex = cardText(cards, ["gender", "sex", "nem", "geschlecht", "sexe", "sexo"]);
 	const birth = cardText(cards, ["birth", "születés", "szuletes", "geburt", "naissance", "nacimiento"]);
 	const death = cardText(cards, ["death", "halál", "halal", "tod", "décès", "deces", "defunción"]);
 	const marriage = cardText(cards, ["marriage", "házasság", "hazassag", "heirat", "mariage", "matrimonio"]);
@@ -81,8 +142,8 @@ const siteFacts = (): SiteFacts => {
 	);
 	return {
 		layoutKnown,
-		name: name?.subtitle || valueUnderLabel(["name", "név", "nev", "nom", "nombre"]),
-		sex: sex?.subtitle || valueUnderLabel(["gender", "sex", "nem", "geschlecht", "sexe", "sexo"]),
+		name: name?.subtitle || headerName() || valueUnderLabel(["name", "név", "nev", "nom", "nombre"]),
+		sex: sex?.subtitle || headerSex() || valueUnderLabel(["gender", "sex", "nem", "geschlecht", "sexe", "sexo"]),
 		birthDate: birth?.date || looseBirth.date,
 		birthPlace: birth?.place || looseBirth.place,
 		deathDate: death?.date || looseDeath.date,

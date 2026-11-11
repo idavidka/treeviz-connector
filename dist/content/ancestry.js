@@ -1587,11 +1587,64 @@ ${body}`;
     }
     return { place: value };
   };
+  var profileHeading = () => {
+    const heading = document.querySelector("h1");
+    return heading instanceof HTMLElement ? heading : void 0;
+  };
+  var headerName = () => {
+    const text = profileHeading()?.textContent?.replace(/\s+/g, " ").trim();
+    if (!text || text.length > 80) {
+      return void 0;
+    }
+    return text;
+  };
+  var headerBanner = () => {
+    const heading = profileHeading();
+    let node = heading?.parentElement ?? void 0;
+    for (let depth = 0; node && depth < 6; depth += 1) {
+      if (node.querySelector("img") || getComputedStyle(node).backgroundImage !== "none") {
+        return node;
+      }
+      node = node.parentElement ?? void 0;
+    }
+    return heading?.parentElement ?? void 0;
+  };
+  var headerSex = () => {
+    const banner = headerBanner();
+    if (!banner) {
+      return void 0;
+    }
+    const chunks = [];
+    banner.querySelectorAll("*").forEach((node) => {
+      for (const name of ["aria-label", "title", "alt", "src", "class"]) {
+        const value = node.getAttribute(name);
+        if (value) {
+          chunks.push(value);
+        }
+      }
+      if (node instanceof HTMLElement) {
+        const image = getComputedStyle(node).backgroundImage;
+        if (image && image !== "none") {
+          chunks.push(image);
+        }
+      }
+    });
+    const blob = chunks.join(" ").toLocaleLowerCase();
+    const female = /\b(female|woman|weiblich|mujer|femme|nő|no)\b/.test(blob) || /gender[_-]?f\b|silhouette[_-]f|iconfemale|_f_|\/f\//.test(blob);
+    const male = /\b(male|man|männlich|hombre|homme|férfi|ferfi)\b/.test(blob) || /gender[_-]?m\b|silhouette[_-]m|iconmale|_m_|\/m\//.test(blob);
+    if (female && !male) {
+      return "F";
+    }
+    if (male && !female) {
+      return "M";
+    }
+    return void 0;
+  };
   var siteFacts = () => {
     const layoutKnown = ancestryLayoutKnown(document);
     const cards = readAncestryCards(document);
     const name = cardText(cards, ["name", "n\xE9v", "nev", "nom", "nombre"]);
-    const sex = cardText(cards, ["gender", "nem", "geschlecht", "sexe", "sexo"]);
+    const sex = cardText(cards, ["gender", "sex", "nem", "geschlecht", "sexe", "sexo"]);
     const birth = cardText(cards, ["birth", "sz\xFClet\xE9s", "szuletes", "geburt", "naissance", "nacimiento"]);
     const death = cardText(cards, ["death", "hal\xE1l", "halal", "tod", "d\xE9c\xE8s", "deces", "defunci\xF3n"]);
     const marriage = cardText(cards, ["marriage", "h\xE1zass\xE1g", "hazassag", "heirat", "mariage", "matrimonio"]);
@@ -1606,8 +1659,8 @@ ${body}`;
     );
     return {
       layoutKnown,
-      name: name?.subtitle || valueUnderLabel(["name", "n\xE9v", "nev", "nom", "nombre"]),
-      sex: sex?.subtitle || valueUnderLabel(["gender", "sex", "nem", "geschlecht", "sexe", "sexo"]),
+      name: name?.subtitle || headerName() || valueUnderLabel(["name", "n\xE9v", "nev", "nom", "nombre"]),
+      sex: sex?.subtitle || headerSex() || valueUnderLabel(["gender", "sex", "nem", "geschlecht", "sexe", "sexo"]),
       birthDate: birth?.date || looseBirth.date,
       birthPlace: birth?.place || looseBirth.place,
       deathDate: death?.date || looseDeath.date,
