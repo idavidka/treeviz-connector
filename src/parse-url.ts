@@ -71,7 +71,11 @@ export const parseMyHeritageLocation = (
 	}
 	const tree = url.pathname.match(MH_TREE);
 	if (tree) {
-		return { site: "myheritage", siteId: tree[1], kind: "tree" };
+		const personId =
+			url.searchParams.get("rootIndividualID") ||
+			url.searchParams.get("individualID") ||
+			undefined;
+		return { site: "myheritage", siteId: tree[1], personId, kind: "tree" };
 	}
 	return undefined;
 };

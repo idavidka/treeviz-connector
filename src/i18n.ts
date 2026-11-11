@@ -19,6 +19,7 @@ const HU = {
 	ambiguous: "Több ilyen nevű személy van a fában: {{names}}",
 	relativesNotWritten: "Rokont ezen az elrendezésen még nem ír a forrás oldalra.",
 	noParentSlot: "Mindkét szülő helye foglalt az Ancestryn.",
+	parentSlotsFull: "Mindkét szülő helye foglalt.",
 	siteNamesPresent: "Az oldalon már szerepel minden név.",
 	warning:
 		"A módosítás az oldalon marad. A TreeViz nem tudja visszavonni. Csak a bejelölt mezők íródnak.",
@@ -86,6 +87,7 @@ const EN: typeof HU = {
 	ambiguous: "More than one person in the tree has this name: {{names}}",
 	relativesNotWritten: "Relatives are not written to the source site on this layout.",
 	noParentSlot: "Both parent slots are already filled on Ancestry.",
+	parentSlotsFull: "Both parent slots are already filled.",
 	siteNamesPresent: "Every name is already on the page.",
 	warning:
 		"The change stays on this site. TreeViz cannot undo it. Only checked fields are written.",
@@ -152,6 +154,7 @@ const DE: typeof HU = {
 	ambiguous: "Mehr als eine Person im Baum hat diesen Namen: {{names}}",
 	relativesNotWritten: "Verwandte werden in diesem Layout nicht auf die Quellseite geschrieben.",
 	noParentSlot: "Beide Elternplätze sind bei Ancestry schon belegt.",
+	parentSlotsFull: "Beide Elternplätze sind schon belegt.",
 	siteNamesPresent: "Jeder Name steht schon auf der Seite.",
 	warning:
 		"Die Änderung bleibt auf dieser Seite. TreeViz kann sie nicht rückgängig machen. Nur die markierten Felder werden geschrieben.",
@@ -218,6 +221,7 @@ const FR: typeof HU = {
 	ambiguous: "Plus d'une personne dans l'arbre porte ce nom : {{names}}",
 	relativesNotWritten: "Les proches ne sont pas écrits sur le site source avec cette mise en page.",
 	noParentSlot: "Les deux places de parents sont déjà prises sur Ancestry.",
+	parentSlotsFull: "Les deux places de parents sont déjà prises.",
 	siteNamesPresent: "Tous les noms sont déjà sur la page.",
 	warning:
 		"La modification reste sur ce site. TreeViz ne peut pas l'annuler. Seuls les champs cochés sont écrits.",
@@ -284,6 +288,7 @@ const ES: typeof HU = {
 	ambiguous: "Más de una persona del árbol tiene este nombre: {{names}}",
 	relativesNotWritten: "Los parientes no se escriben en el sitio de origen con este diseño.",
 	noParentSlot: "Los dos lugares de padres ya están ocupados en Ancestry.",
+	parentSlotsFull: "Los dos lugares de padres ya están ocupados.",
 	siteNamesPresent: "Todos los nombres ya están en la página.",
 	warning:
 		"El cambio se queda en este sitio. TreeViz no puede deshacerlo. Solo se escriben los campos marcados.",
@@ -350,6 +355,7 @@ const RU: typeof HU = {
 	ambiguous: "В дереве больше одного человека с таким именем: {{names}}",
 	relativesNotWritten: "Родственников в этой раскладке на сайт-источник не записывает.",
 	noParentSlot: "Оба места родителей на Ancestry уже заняты.",
+	parentSlotsFull: "Оба места родителей уже заняты.",
 	siteNamesPresent: "Все имена уже есть на странице.",
 	warning:
 		"Изменение останется на этом сайте. TreeViz не сможет его отменить. Записываются только отмеченные поля.",
@@ -416,6 +422,7 @@ const JA: typeof HU = {
 	ambiguous: "同じ名前の人が複数いる: {{names}}",
 	relativesNotWritten: "このレイアウトでは親族を元のサイトに書き込まない。",
 	noParentSlot: "Ancestryでは両親の欄が両方埋まっている。",
+	parentSlotsFull: "両親の欄が両方埋まっている。",
 	siteNamesPresent: "どの名前もページ上にすでにある。",
 	warning:
 		"変更はこのサイトに残る。TreeViz は取り消せない。チェックした項目だけ書き込む。",
@@ -482,6 +489,7 @@ const ZH: typeof HU = {
 	ambiguous: "家谱里有不止一个同名的人：{{names}}",
 	relativesNotWritten: "这种版式不会把亲属写回源网站。",
 	noParentSlot: "Ancestry 上的父母位置都已占用。",
+	parentSlotsFull: "父母的位置都已占用。",
 	siteNamesPresent: "页面上已经有这些名字。",
 	warning: "修改会留在这个网站上。TreeViz 不能撤销。只会写入勾选的字段。",
 	layout: "TreeViz Connector 不认识这个页面版式，所以不会写入。",

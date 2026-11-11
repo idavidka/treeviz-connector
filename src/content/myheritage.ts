@@ -1,4 +1,17 @@
-import { diffFactValues, diffNameList, diffPerson, factTitleKey, parseLooseDate, sameName } from "../compare.js";
+import {
+	diffFactValues,
+	diffNameList,
+	diffPerson,
+	collapse,
+	factDatePhrase,
+	factTitleKey,
+	foldName,
+	parseLooseDate,
+	samePersonName,
+	splitFactValue,
+	splitPersonName,
+	splitWebLink,
+} from "../compare.js";
 import type { SiteFacts } from "../compare.js";
 import { languageReady, onLanguage, t } from "../i18n.js";
 import { connectorLog } from "../log.js";
@@ -206,26 +219,9 @@ const FAVORITE_FIELDS: Array<[string, string]> = [
 	["favoriteQuotesHeader", "Quotes"],
 ];
 
-const roleOf = (label: string): "parents" | "spouses" | "children" | undefined => {
-	const key = label
-		.normalize("NFD")
-		.replace(/\p{Diacritic}/gu, "")
-		.toLocaleLowerCase()
-		.trim();
-	if (/^(father|mother|parent|apa|anya|apja|anyja)$/.test(key)) {
-		return "parents";
-	}
-	if (/^(husband|wife|spouse|ferj|ferje|feleseg|felesege|hazastars|hazastarsa)$/.test(key)) {
-		return "spouses";
-	}
-	if (/^(son|daughter|child|fia|lanya|gyermek|gyermeke)$/.test(key)) {
-		return "children";
-	}
-	return undefined;
-};
-
 const readEditorSections = (
-	form: ParentNode
+	form: ParentNode,
+	step: string
 ): { facts: ConnectorFact[]; relatives: Record<"parents" | "spouses" | "children", string[]> } => {
 	fieldByTitle.clear();
 	const facts: ConnectorFact[] = [];
@@ -347,14 +343,11 @@ const readEditorSections = (
 	});
 	eachPresent(form, "factType", (index) => {
 		const type = controlValue(form, `factType${index}`);
-		const title = FACT_TYPE_TITLE[type] || controlValue(form, `factHeader${index}`) || type;
-		if (type === "DEAT" && namedControl(form, `causeOfDeath${index}`)) {
-			pushFact(
-				facts,
-				"Cause of Death",
-				controlValue(form, `causeOfDeath${index}`),
-				`causeOfDeath${index}`
-			);
+		const title = FACT_TYPE_TITLE[type] || type;
+		if (type === "DEAT") {
+			const cause =
+				controlValue(form, `causeOfDeath${index}`) || controlValue(form, `factHeader${index}`);
+			pushFact(facts, "Cause of Death", cause, `causeOfDeath${index}`);
 		}
 		if (title === "Birth" || title === "Death" || title === "Marriage") {
 			return;
@@ -366,27 +359,30 @@ const readEditorSections = (
 				joinParts([
 					controlValue(form, `factHeader${index}`),
 					controlValue(form, `factPlace${index}`),
-					controlValue(form, `causeOfDeath${index}`),
 					composedDate(`factDate${index}`, form),
 				]),
-				namedControl(form, `factHeader${index}`) ? `factHeader${index}` : `factPlace${index}`
+				`factHeader${index}`
 			);
 		}
 	});
-	if (editorStep() === "biography") {
+	if (step === "biography") {
 		const area = form.querySelector("textarea");
 		if (area instanceof HTMLTextAreaElement && area.name) {
 			pushFact(facts, "Biography", area.value, area.name);
 		}
 	}
-	if (editorStep() === "family") {
+	if (step === "family") {
+		const spouse = form.querySelector("[name='relationshipWithSpouse0']");
 		for (const label of Array.from(form.querySelectorAll(".FL_Label"))) {
-			const role = label.nextElementSibling;
-			const kind = role ? roleOf(role.textContent || "") : undefined;
 			const name = label.textContent?.trim() || "";
-			if (kind && name) {
-				relatives[kind].push(name);
+			if (!name) {
+				continue;
 			}
+			const beforeSpouse = Boolean(
+				spouse &&
+					(label.compareDocumentPosition(spouse) & Node.DOCUMENT_POSITION_FOLLOWING)
+			);
+			relatives[beforeSpouse || !spouse ? "parents" : "spouses"].push(name);
 		}
 	}
 	return { facts, relatives };
@@ -402,15 +398,14 @@ const dateFields = (prefix: string, raw?: string): WriteField[] => {
 	if (!parsed) {
 		return [];
 	}
+	const qualifier = qualifierOf(raw);
 	const fields: WriteField[] = [
 		{ id: `gdp_firstDateYear_${prefix}`, value: String(parsed.y) },
+		{ id: `gdp_firstDateMonth_${prefix}`, value: parsed.m ? String(parsed.m) : "0" },
+		{ id: `gdp_firstDateDay_${prefix}`, value: parsed.d ? String(parsed.d) : "0" },
+		{ id: `gdp_dateType_${prefix}`, value: qualifier },
+		{ id: `gdp_firstOperatorType_${prefix}`, value: qualifier },
 	];
-	if (parsed.m) {
-		fields.push({ id: `gdp_firstDateMonth_${prefix}`, value: String(parsed.m) });
-	}
-	if (parsed.d) {
-		fields.push({ id: `gdp_firstDateDay_${prefix}`, value: String(parsed.d) });
-	}
 	return fields;
 };
 
@@ -427,11 +422,11 @@ const factRow = (type: string): string | undefined => {
 	return undefined;
 };
 
-const fieldsFor = (person: ConnectorPerson, keys: FieldKey[]): WriteField[] => {
+const fieldsFor = (person: ConnectorPerson, keys: FieldKey[], profile = false): WriteField[] => {
 	const fields: WriteField[] = [];
 	const form = activeForm() ?? document;
-	const birthRow = factRow("BIRT");
-	const deathRow = factRow("DEAT");
+	const birthRow = profile ? undefined : factRow("BIRT");
+	const deathRow = profile ? undefined : factRow("DEAT");
 	if (keys.includes("name")) {
 		if (person.givenName) {
 			fields.push({ id: "firstName", value: person.givenName });
@@ -518,78 +513,603 @@ const openEditor = async (personId: string, siteId?: string): Promise<boolean> =
 	return opened;
 };
 
-const showTree = (
+const QUEUE_KEY = "treeviz-mh-queue";
+const SAVED_KEY = "treeviz-mh-saved";
+
+type MhJob = {
+	personId: string;
+	siteId: string;
+	page: { kind: "editor"; step: string } | { kind: "tree" };
+	payload: Record<string, unknown>;
+};
+
+const readQueue = (): MhJob[] => {
+	try {
+		const raw = sessionStorage.getItem(QUEUE_KEY);
+		const parsed = raw ? (JSON.parse(raw) as MhJob[]) : [];
+		return Array.isArray(parsed) ? parsed : [];
+	} catch {
+		return [];
+	}
+};
+
+const writeQueue = (jobs: MhJob[]): void => {
+	if (!jobs.length) {
+		sessionStorage.removeItem(QUEUE_KEY);
+		return;
+	}
+	sessionStorage.setItem(QUEUE_KEY, JSON.stringify(jobs));
+};
+
+let applying = false;
+
+const jobUrl = (job: MhJob): string | undefined => {
+	if (job.page.kind === "editor") {
+		if (onEditorPage() && formPersonId() === job.personId) {
+			const url = new URL(location.href);
+			url.searchParams.set("step", job.page.step);
+			url.searchParams.set("indID", job.personId);
+			return url.toString();
+		}
+		if (!job.siteId) {
+			return undefined;
+		}
+		const url = new URL("/FP/edit-profile.php", location.origin);
+		url.searchParams.set("s", job.siteId);
+		url.searchParams.set("indID", job.personId);
+		url.searchParams.set("origin", "ProfilePage");
+		url.searchParams.set("step", job.page.step);
+		return url.toString();
+	}
+	const link = document.querySelector("a[href*='/family-trees/']");
+	if (link instanceof HTMLAnchorElement) {
+		const url = new URL(link.href, location.origin);
+		const treeId =
+			valueOf("familyTreeID") || url.searchParams.get("familyTreeID") || "";
+		if (treeId) {
+			url.searchParams.set("familyTreeID", treeId);
+		}
+		url.searchParams.set("rootIndividualID", job.personId);
+		return url.toString();
+	}
+	if (/\/family-trees\//i.test(location.pathname)) {
+		const url = new URL(location.href);
+		url.searchParams.set("rootIndividualID", job.personId);
+		return url.toString();
+	}
+	return undefined;
+};
+
+const pageMatches = (job: MhJob): boolean => {
+	const here = parseMyHeritageLocation(location.href);
+	const person = here?.personId?.replace(/[^\d]/g, "") || "";
+	if (person !== job.personId) {
+		return false;
+	}
+	if (job.page.kind === "tree") {
+		return here?.kind === "tree";
+	}
+	return /edit-profile\.php/i.test(location.pathname) && editorStep() === job.page.step;
+};
+
+const sleep = (ms: number): Promise<void> =>
+	new Promise((resolve) => window.setTimeout(resolve, ms));
+
+const runJob = async (job: MhJob): Promise<string> => {
+	document.documentElement.setAttribute(
+		"data-treeviz-connector-write",
+		JSON.stringify(job.payload)
+	);
+	document.documentElement.removeAttribute("data-treeviz-connector-result");
+	const response = await ask({ type: "connector:save-myheritage" });
+	if (!response.ok) {
+		return "failed";
+	}
+	const started = Date.now();
+	while (Date.now() - started < 12000) {
+		const result = document.documentElement.getAttribute("data-treeviz-connector-result");
+		if (result && result !== "pending") {
+			document.documentElement.removeAttribute("data-treeviz-connector-result");
+			return result;
+		}
+		await sleep(200);
+	}
+	return sessionStorage.getItem(SAVED_KEY) ? "ok" : "failed";
+};
+
+const statusFor = (result: string): string => {
+	if (result === "ok") {
+		return t("wrote");
+	}
+	if (result === "no-parent") {
+		return t("parentSlotsFull");
+	}
+	if (result === "missing") {
+		return t("missingFact");
+	}
+	if (result === "unchanged" || result === "no-add") {
+		return t("factNotWritten");
+	}
+	if (result === "no-button") {
+		return t("relativesNotWritten");
+	}
+	return t("failed");
+};
+
+const readLiveRelatives = (): Record<"parents" | "spouses" | "children", string[]> => {
+	const relatives = { parents: [] as string[], spouses: [] as string[], children: [] as string[] };
+	for (const card of Array.from(document.querySelectorAll(".family_relative"))) {
+		const name = card.querySelector(".mh_typo_11")?.textContent?.trim() || "";
+		if (!name) {
+			continue;
+		}
+		if (card.classList.contains("parent")) {
+			relatives.parents.push(name);
+		} else if (card.classList.contains("spouse")) {
+			relatives.spouses.push(name);
+		} else if (card.classList.contains("child")) {
+			relatives.children.push(name);
+		}
+	}
+	return relatives;
+};
+
+const fetchEditor = async (step: string): Promise<Document | null> => {
+	if (onEditorPage() && editorStep() === step) {
+		return document;
+	}
+	const url = editorCheckUrl(step);
+	if (!url) {
+		return null;
+	}
+	try {
+		const response = await fetch(url, { credentials: "include" });
+		if (!response.ok) {
+			return null;
+		}
+		return new DOMParser().parseFromString(await response.text(), "text/html");
+	} catch {
+		return null;
+	}
+};
+
+const siteFrom = (root: ParentNode): SiteFacts => ({
+	layoutKnown: true,
+	name: `${valueOf("firstName", root)} ${valueOf("lastName", root)}`.trim(),
+	sex: checkedSex(root),
+	birthDate: composedDate("birthDate", root),
+	birthPlace: valueOf("birthPlace", root),
+	deathDate: composedDate("deathDate", root),
+	deathPlace: valueOf("deathPlace", root),
+	marriageDate: composedDate("marriageDate0", root),
+	marriagePlace: valueOf("marriagePlace0", root),
+});
+
+const qualifierOf = (raw?: string): string => {
+	const text = foldName(raw);
+	if (/\b(bef|before|elott|vor|avant|antes)\b/.test(text)) {
+		return "2";
+	}
+	if (/\b(aft|after|utan|nach|apres|despues)\b/.test(text)) {
+		return "3";
+	}
+	if (/\b(abt|about|cir|circa|est|cal|korul)\b/.test(text)) {
+		return "4";
+	}
+	return "1";
+};
+
+const datePayload = (raw?: string): { year: string; month: string; day: string; qualifier: string } | undefined => {
+	const parsed = parseLooseDate(raw);
+	if (!parsed) {
+		return undefined;
+	}
+	return {
+		year: String(parsed.y),
+		month: parsed.m ? String(parsed.m) : "0",
+		day: parsed.d ? String(parsed.d) : "0",
+		qualifier: qualifierOf(raw),
+	};
+};
+
+const FACT_CATEGORY: Record<string, string> = {
+	BIRT: "3",
+	CHR: "3",
+	BAPM: "3",
+	DEAT: "7",
+	BURI: "7",
+	OCCU: "18",
+};
+
+const factCategory = (factType: string): string => {
+	if (FACT_CATEGORY[factType]) {
+		return FACT_CATEGORY[factType];
+	}
+	if (/^military\b/i.test(factType)) {
+		return "1";
+	}
+	return "0";
+};
+
+const factTypesFor = (label: string): string[] => {
+	const key = factTitleKey(label);
+	const codes = Object.entries(FACT_TYPE_TITLE)
+		.filter(([, title]) => factTitleKey(title) === key)
+		.map(([code]) => code);
+	return codes.length ? codes : [label];
+};
+
+const textWithoutDate = (value?: string): string => {
+	const date = factDatePhrase(value);
+	const text = collapse(value);
+	if (!date) {
+		return text;
+	}
+	return text
+		.replace(date, " ")
+		.replace(/\s+/g, " ")
+		.replace(/^[, ]+|[, ]+$/g, "")
+		.trim();
+};
+
+const SINGLE_FIELDS: Record<string, { step: string; id: string }> = {
+	nickname: { step: "essentials", id: "nickname" },
+	"former name": { step: "essentials", id: "formerName" },
+	"married name": { step: "essentials", id: "marriedName" },
+	prefix: { step: "essentials", id: "prefix" },
+	suffix: { step: "essentials", id: "suffix" },
+	"religious name": { step: "essentials", id: "religiousName" },
+	godparents: { step: "essentials", id: "godparents" },
+	religion: { step: "personal", id: "religion" },
+	nationality: { step: "personal", id: "nationalitiesHeader" },
+	language: { step: "personal", id: "languages" },
+	political: { step: "personal", id: "politicsHeader" },
+	height: { step: "personal", id: "height" },
+	weight: { step: "personal", id: "weight" },
+	"hair color": { step: "personal", id: "hairColor" },
+	"eye color": { step: "personal", id: "eyeColor" },
+	"physical description": { step: "personal", id: "physical" },
+	interests: { step: "favorites", id: "favoriteInterestsHeader" },
+	activities: { step: "favorites", id: "favoriteActivitiesHeader" },
+	music: { step: "favorites", id: "favoriteMusicHeader" },
+	movies: { step: "favorites", id: "favoriteMoviesHeader" },
+	"tv shows": { step: "favorites", id: "favoriteTVShowsHeader" },
+	books: { step: "favorites", id: "favoriteBooksHeader" },
+	sports: { step: "favorites", id: "favoriteSportsHeader" },
+	restaurants: { step: "favorites", id: "favoriteRestaurantsHeader" },
+	food: { step: "favorites", id: "favoriteFoodHeader" },
+	people: { step: "favorites", id: "favoritePeopleHeader" },
+	getaways: { step: "favorites", id: "favoriteGetawaysHeader" },
+	quotes: { step: "favorites", id: "favoriteQuotesHeader" },
+};
+
+const editorJob = (
+	personId: string,
+	siteId: string,
+	step: string,
+	payload: Record<string, unknown>
+): MhJob => ({
+	personId,
+	siteId,
+	page: { kind: "editor", step },
+	payload,
+});
+
+const jobsFor = (
+	person: ConnectorPerson,
+	tree: ConnectorTree,
+	diff: FieldDiff,
+	siteId: string,
+	relatives: Record<"parents" | "spouses" | "children", string[]>
+): MhJob[] => {
+	const personId = person.sourcePersonId.replace(/[^\d]/g, "");
+	if (diff.key === "parents" || diff.key === "spouses" || diff.key === "children") {
+		const group = diff.key;
+		const ids =
+			group === "parents" ? person.parentIds : group === "spouses" ? person.spouseIds : person.childIds;
+		const missing = (ids ?? [])
+			.map((id) => personIn(tree, id))
+			.filter((relative): relative is ConnectorPerson => Boolean(relative?.name))
+			.filter(
+				(relative) => !relatives[group].some((siteName) => samePersonName(siteName, relative.name))
+			);
+		return missing.map((relative) => {
+			const parts = splitPersonName(relative.name.replace(/,/g, " "));
+			const sex = relative.sex;
+			const buttonIds =
+				group === "children"
+					? sex === "F"
+						? ["addDaughterButton"]
+						: ["addSonButton"]
+					: group === "spouses"
+						? ["addPartnerButton"]
+						: sex === "F"
+							? ["addMotherButton", "addParentButton"]
+							: ["addFatherButton", "addParentButton"];
+			return {
+				personId,
+				siteId,
+				page: { kind: "tree" as const },
+				payload: {
+					action: "relative",
+					personId,
+					buttonIds,
+					parent: group === "parents",
+					given: relative.givenName || parts.given,
+					surname: relative.surname || parts.surname,
+					suffix: parts.suffix,
+					sex: sex || "U",
+					birthPlace: relative.birthPlace,
+					date: datePayload(relative.birthDate),
+				},
+			} satisfies MhJob;
+		});
+	}
+	if (diff.key !== "fact") {
+		const step = diff.key.startsWith("marriage") ? "family" : "essentials";
+		return [editorJob(personId, siteId, step, { action: "fields", fields: fieldsFor(person, [diff.key], true) })];
+	}
+	const label = diff.label || "";
+	const key = factTitleKey(label);
+	const treeParts = splitFactValue(diff.treeviz);
+	const siteParts = splitFactValue(diff.site);
+	const single = SINGLE_FIELDS[key];
+	if (single) {
+		return [
+			editorJob(personId, siteId, single.step, {
+				action: "fields",
+				fields: [{ id: single.id, value: diff.treeviz || "" }],
+			}),
+		];
+	}
+	if (key === "christening" || key === "burial") {
+		const prefix = key === "christening" ? "christeningDate" : "burialDate";
+		const placeId = key === "christening" ? "christeningPlace" : "burialPlace";
+		return [
+			editorJob(personId, siteId, "essentials", {
+				action: "fields",
+				fields: [
+					...dateFields(prefix, treeParts.date),
+					{ id: placeId, value: treeParts.place || treeParts.description || "" },
+				],
+			}),
+		];
+	}
+	if (key === "cause of death") {
+		const cause = treeParts.description || diff.treeviz || "";
+		return [
+			editorJob(personId, siteId, "essentials", {
+				action: "fields",
+				fields: [{ id: "causeOfDeath", value: cause }],
+			}),
+			editorJob(personId, siteId, "facts", {
+				action: "fact",
+				types: ["DEAT"],
+				factType: "DEAT",
+				category: "7",
+				genealogy: "5",
+				add: false,
+				matchYear: "",
+				matchHeader: "",
+				cause,
+			}),
+		];
+	}
+	let lead: MhJob | undefined;
+	const rowTarget =
+		key === "occupation"
+			? { step: "work", field: "workHeader", addFn: "addWorkFact", datePrefix: "workDate", facts: true }
+			: key === "education"
+				? {
+						step: "education",
+						field: "educationHeader",
+						addFn: "addEducationFact",
+						datePrefix: "educationDate",
+						facts: true,
+					}
+				: key === "citation"
+					? {
+							step: "citations",
+							field: "citationDescription",
+							addFn: "addCitation",
+							datePrefix: "citationDate",
+							facts: false,
+						}
+					: key === "biography"
+						? {
+								step: "biography",
+								field: "biographyText",
+								addFn: "addBiographyNote",
+								datePrefix: "",
+								facts: false,
+							}
+						: undefined;
+	if (rowTarget) {
+		const rowJob = editorJob(personId, siteId, rowTarget.step, {
+			action: "contact",
+			field: rowTarget.field,
+			addFn: rowTarget.addFn,
+			datePrefix: rowTarget.datePrefix,
+			from: diff.site || "",
+			add: !diff.site,
+			skip: true,
+			consumesQueue: true,
+			value: textWithoutDate(diff.treeviz),
+			date: datePayload(treeParts.date),
+		});
+		if (!rowTarget.facts) {
+			return [rowJob];
+		}
+		lead = rowJob;
+	}
+	if (key === "web address") {
+		const target = splitWebLink(diff.treeviz);
+		const current = splitWebLink(diff.site);
+		if (!target.url) {
+			return [];
+		}
+		return [
+			editorJob(personId, siteId, "contact", {
+				action: "contact",
+				field: "contactWebAddress",
+				nameField: "contactWebUsername",
+				addFn: "addWebFact",
+				from: current.url,
+				add: !current.url,
+				value: target.url,
+				name: target.name || "",
+			}),
+		];
+	}
+	if (key === "residence") {
+		return [
+			editorJob(personId, siteId, "contact", {
+				action: "contact",
+				field: "addressAddressOne",
+				datePrefix: "addressDate",
+				addFn: "addAddressFact",
+				from: siteParts.place || siteParts.description,
+				add: !diff.site,
+				value: treeParts.place || treeParts.description || "",
+				date: datePayload(treeParts.date),
+			}),
+		];
+	}
+	if (key === "email" || key === "phone" || key === "fax") {
+		const field = key === "email" ? "contactEmail" : key === "phone" ? "contactPhone" : "contactFax";
+		const addFn = key === "email" ? "addEmailFact" : key === "phone" ? "addPhoneFact" : "addFaxFact";
+		return [
+			editorJob(personId, siteId, "contact", {
+				action: "contact",
+				field,
+				addFn,
+				from: diff.site,
+				add: !diff.site,
+				value: diff.treeviz || "",
+			}),
+		];
+	}
+	const types = factTypesFor(label);
+	const siteDate = parseLooseDate(siteParts.date);
+	const cause = key === "cause of death";
+	const factJob = editorJob(personId, siteId, "facts", {
+			action: "fact",
+			types: cause ? ["DEAT"] : types,
+			factType: types[0],
+			category: factCategory(types[0] || label),
+			genealogy: "5",
+			add: cause ? false : !diff.site,
+			matchYear: siteDate?.y ? String(siteDate.y) : "",
+			matchHeader: siteParts.description || "",
+			header: cause ? undefined : treeParts.description,
+			place: cause ? undefined : treeParts.place,
+			cause: cause ? treeParts.description || diff.treeviz || "" : undefined,
+			date: datePayload(treeParts.date),
+		});
+	return lead ? [lead, factJob] : [factJob];
+};
+
+const showTree = async (
 	tree: ConnectorTree,
 	personId: string,
 	siteId: string | undefined,
 	cachedAt?: number
-): void => {
+): Promise<void> => {
 	const person = personIn(tree, personId);
 	if (!person) {
 		showPanel({ heading: t("title"), detail: t("notInTree"), cachedAt });
 		return;
 	}
-	const form = readForm();
-	const formRoot = activeForm();
-	const sameForm = Boolean(
-		form && (formPersonId() === personId || (onEditorPage() && urlPersonId() === personId))
-	);
-	const sections = formRoot && sameForm ? readEditorSections(formRoot) : undefined;
-	const keep = new Set<FieldKey>();
-	if (formRoot && namedControl(formRoot, "firstName")) {
-		(["name", "sex", "birthDate", "birthPlace", "deathDate", "deathPlace"] as FieldKey[]).forEach(
-			(key) => keep.add(key)
-		);
-	}
-	if (
-		formRoot &&
-		(namedControl(formRoot, "marriagePlace0") ||
-			namedControl(formRoot, "gdp_firstDateYear_marriageDate0"))
-	) {
-		keep.add("marriageDate");
-		keep.add("marriagePlace");
-	}
-	if (formRoot) {
-		for (let index = 0; index < 30; index += 1) {
-			if (!namedControl(formRoot, `factType${index}`)) {
+	const compareSteps = [
+		"essentials",
+		"facts",
+		"contact",
+		"family",
+		"work",
+		"education",
+		"biography",
+		"favorites",
+		"personal",
+		"citations",
+	] as const;
+	const loaded = await Promise.all(compareSteps.map((step) => fetchEditor(step)));
+	const byStep = Object.fromEntries(compareSteps.map((step, index) => [step, loaded[index]])) as Record<
+		(typeof compareSteps)[number],
+		Document | null
+	>;
+	const essentials = byStep.essentials;
+	const factsDoc = byStep.facts;
+	const contact = byStep.contact;
+	const family = byStep.family;
+	const formRoot =
+		essentials?.querySelector("#editProfileForm") ??
+		factsDoc?.querySelector("#editProfileForm") ??
+		null;
+	const form = formRoot ? siteFrom(formRoot) : undefined;
+	const factsRoot = factsDoc?.querySelector("#editProfileForm");
+	if (form && factsRoot) {
+		for (let index = 0; index < 40; index += 1) {
+			if (!namedControl(factsRoot, `factType${index}`)) {
 				break;
 			}
-			const type = controlValue(formRoot, `factType${index}`);
-			if (type === "DEAT" && form) {
-				form.deathDate = composedDate(`factDate${index}`, formRoot) || form.deathDate;
-				form.deathPlace = controlValue(formRoot, `factPlace${index}`) || form.deathPlace;
-				keep.add("deathDate");
-				keep.add("deathPlace");
+			const type = controlValue(factsRoot, `factType${index}`);
+			if (type === "DEAT") {
+				form.deathDate = composedDate(`factDate${index}`, factsRoot) || form.deathDate;
+				form.deathPlace = controlValue(factsRoot, `factPlace${index}`) || form.deathPlace;
 			}
-			if (type === "BIRT" && form) {
-				form.birthDate = composedDate(`factDate${index}`, formRoot) || form.birthDate;
-				form.birthPlace = controlValue(formRoot, `factPlace${index}`) || form.birthPlace;
-				keep.add("birthDate");
-				keep.add("birthPlace");
+			if (type === "BIRT") {
+				form.birthDate = composedDate(`factDate${index}`, factsRoot) || form.birthDate;
+				form.birthPlace = controlValue(factsRoot, `factPlace${index}`) || form.birthPlace;
 			}
 		}
 	}
-	const diffs = form && sameForm ? diffPerson(form, person, writable).filter((diff) => keep.has(diff.key)) : [];
-	if (sections) {
-		const relevant = (person.facts ?? []).filter((fact) =>
-			fieldByTitle.has(factTitleKey(fact.title))
-		);
-		diffs.push(...factListDiffs(sections.facts, relevant));
+	const familyRoot = family?.querySelector("#editProfileForm");
+	if (form && familyRoot) {
+		form.marriageDate = composedDate("marriageDate0", familyRoot) || form.marriageDate;
+		form.marriagePlace = valueOf("marriagePlace0", familyRoot) || form.marriagePlace;
 	}
-	if (sections && editorStep() === "family") {
-		const namesOf = (ids?: string[]): string[] =>
-			(ids ?? [])
-				.map((id) => personIn(tree, id)?.name || "")
-				.filter(Boolean);
-		const groups = [
-			["parents", person.parentIds],
-			["spouses", person.spouseIds],
-		] as const;
-		for (const [key, ids] of groups) {
-			const diff = diffNameList(key, sections.relatives[key], namesOf(ids));
-			if (diff) {
-				diffs.push(diff);
-			}
+	const collected: ConnectorFact[] = [];
+	const relatives = { parents: [] as string[], spouses: [] as string[], children: [] as string[] };
+	for (const step of compareSteps) {
+		const doc = byStep[step];
+		const root = doc?.querySelector("#editProfileForm");
+		if (!root) {
+			continue;
+		}
+		const section = readEditorSections(root, step);
+		collected.push(...section.facts);
+		relatives.parents.push(...section.relatives.parents);
+		relatives.spouses.push(...section.relatives.spouses);
+	}
+	const live = readLiveRelatives();
+	if (live.parents.length) {
+		relatives.parents = live.parents;
+	}
+	if (live.spouses.length) {
+		relatives.spouses = live.spouses;
+	}
+	relatives.children = live.children;
+	const known = Boolean(form);
+	const diffs = form ? diffPerson(form, person, writable) : [];
+	diffs.push(...factListDiffs(collected, person.facts ?? []));
+	const namesOf = (ids?: string[]): string[] =>
+		(ids ?? [])
+			.map((id) => personIn(tree, id)?.name || "")
+			.filter(Boolean);
+	for (const [key, ids] of [
+		["parents", person.parentIds],
+		["spouses", person.spouseIds],
+		["children", person.childIds],
+	] as const) {
+		if (!relatives[key].length && !(ids ?? []).length) {
+			continue;
+		}
+		if (key === "children" && !document.querySelector(".family_relative")) {
+			continue;
+		}
+		const diff = diffNameList(key, relatives[key], namesOf(ids));
+		if (diff) {
+			diffs.push(diff);
 		}
 	}
 	void ask({
@@ -599,7 +1119,7 @@ const showTree = (
 			sourceTreeId: siteId ?? tree.sourceTreeId ?? "",
 			sourcePersonId: person.sourcePersonId,
 			readAt: Date.now(),
-			layoutKnown: sameForm,
+			layoutKnown: known,
 			diffs,
 		},
 	});
@@ -607,41 +1127,40 @@ const showTree = (
 		tree: tree.name,
 		siteId,
 		personId,
-		formOpen: Boolean(form),
-		formPersonId: formPersonId(),
-		sameForm,
+		known,
 		diffs: diffs.map((diff) => ({
 			key: diff.key,
+			label: diff.label,
 			site: diff.site,
 			treeviz: diff.treeviz,
 		})),
 	});
-	const site: SiteFacts = form && sameForm ? form : { layoutKnown: false };
+	const saved = sessionStorage.getItem(SAVED_KEY);
+	if (saved && !readQueue().length) {
+		sessionStorage.removeItem(SAVED_KEY);
+	}
 	showPanel({
 		heading: t("title"),
 		detail: t("inTree", { tree: tree.name }),
 		cachedAt,
-		diffs: sameForm ? diffs : undefined,
-		layoutKnown: sameForm ? true : undefined,
-		onOpenEditor: sameForm
+		diffs: known ? diffs : undefined,
+		layoutKnown: known ? true : undefined,
+		status: saved && !readQueue().length ? t("wrote") : undefined,
+		onOpenEditor: known
 			? undefined
 			: () => {
 					patchPanel({ busy: true });
 					void openEditor(personId, siteId).then((opened) => {
 						if (opened) {
-							showTree(tree, personId, siteId, cachedAt);
+							void showTree(tree, personId, siteId, cachedAt);
 						} else {
 							patchPanel({ busy: false, status: t("layout") });
 						}
 					});
 				},
-		onUpdateSite: sameForm
+		onUpdateSite: known
 			? (diff) => {
-					if (diff.key === "parents" || diff.key === "spouses" || diff.key === "children") {
-						patchPanel({ status: t("relativesNotWritten") });
-						return;
-					}
-					void writeSelected(person, diff);
+					void writeSelected(person, tree, diff, siteId ?? "", relatives);
 				}
 			: undefined,
 		onUpdateTree: (diff) => {
@@ -674,37 +1193,100 @@ const showTree = (
 	});
 };
 
-const writeSelected = async (person: ConnectorPerson, diff: FieldDiff): Promise<void> => {
+const writeSelected = async (
+	person: ConnectorPerson,
+	tree: ConnectorTree,
+	diff: FieldDiff,
+	siteId: string,
+	relatives: Record<"parents" | "spouses" | "children", string[]>
+): Promise<void> => {
 	if (!navigator.onLine) {
 		patchPanel({ status: t("offline") });
 		return;
 	}
-	let fields = fieldsFor(person, [diff.key]);
-	if (diff.key === "fact" && diff.label && diff.treeviz) {
-		const id = fieldByTitle.get(factTitleKey(diff.label));
-		fields = id ? [{ id, value: diff.treeviz }] : [];
-	}
-	if (!fields.length) {
-		patchPanel({ status: t("factNotWritten") });
+	const jobs = jobsFor(person, tree, diff, siteId, relatives).filter((job) => {
+		if (job.payload.action !== "fields") {
+			return true;
+		}
+		const fields = job.payload.fields as WriteField[] | undefined;
+		return Boolean(fields?.length);
+	});
+	if (!jobs.length) {
+		patchPanel({
+			status:
+				diff.key === "parents" || diff.key === "spouses" || diff.key === "children"
+					? t("siteNamesPresent")
+					: t("factNotWritten"),
+		});
 		return;
 	}
-	document.documentElement.setAttribute(
-		"data-treeviz-connector-write",
-		JSON.stringify(fields)
-	);
+	writeQueue(jobs);
 	patchPanel({ busy: true });
-	connectorLog("myheritage", "write fields", fields.map((field) => field.id));
-	const response = await ask({ type: "connector:save-myheritage" });
-	const result = document.documentElement.getAttribute("data-treeviz-connector-result");
-	connectorLog("myheritage", "write result", { ok: response.ok, result });
-	document.documentElement.removeAttribute("data-treeviz-connector-result");
-	patchPanel({
-		busy: false,
-		status: response.ok && result === "ok" ? t("wrote") : t("failed"),
-	});
+	connectorLog("myheritage", "queue write", jobs.map((job) => job.payload.action));
+	href = "";
+	tick();
+};
+
+const continueQueue = async (): Promise<boolean> => {
+	const jobs = readQueue();
+	if (!jobs.length || applying) {
+		return false;
+	}
+	const job = jobs[0];
+	if (!job) {
+		return false;
+	}
+	if (!pageMatches(job)) {
+		const url = jobUrl(job);
+		if (url && url !== location.href) {
+			location.assign(url);
+			return true;
+		}
+		writeQueue([]);
+		showPanel({ heading: t("title"), detail: t("failed") });
+		return true;
+	}
+	applying = true;
+	writeQueue(jobs.slice(1));
+	connectorLog("myheritage", "apply", job.payload.action);
+	const result = await runJob(job);
+	applying = false;
+	connectorLog("myheritage", "apply result", result);
+	if (result === "skip") {
+		if (!readQueue().length) {
+			patchPanel({ busy: false, status: t("factNotWritten") });
+			return true;
+		}
+		href = "";
+		tick();
+		return true;
+	}
+	if (result !== "ok") {
+		writeQueue([]);
+		sessionStorage.removeItem(SAVED_KEY);
+		patchPanel({ busy: false, status: statusFor(result) });
+		return true;
+	}
+	if (job.payload.consumesQueue) {
+		writeQueue([]);
+		return false;
+	}
+	if (!readQueue().length) {
+		return false;
+	}
+	const stayed = location.href;
+	await sleep(1500);
+	if (location.href === stayed) {
+		href = "";
+		tick();
+	}
+	return true;
 };
 
 const renderMatch = async (): Promise<void> => {
+	if (await continueQueue()) {
+		return;
+	}
 	const location = parseMyHeritageLocation(window.location.href);
 	if (!location?.siteId) {
 		connectorLog("myheritage", "url is not a tree or profile", window.location.href);
