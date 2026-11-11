@@ -1,6 +1,6 @@
 {
 	"name": "@treeviz/treeviz-connector",
-	"version": "4.0.1",
+	"version": "4.0.2",
 	"description": "Chrome extension that compares an Ancestry or MyHeritage person with a TreeViz tree.",
 	"private": true,
 	"license": "MIT",
