@@ -338,15 +338,27 @@ const readEditorSections = (
 		);
 		pushFact(facts, "Citation", chosen.join(", "), `citationDescription${index}`);
 	});
+	if (step === "family") {
+		form.querySelectorAll("input[name], textarea[name]").forEach((node) => {
+			const name = node.getAttribute("name") || "";
+			if (/^marriage.*(note|description|header|comment)/i.test(name)) {
+				pushFact(facts, "Marriage", controlValue(form, name), name);
+			}
+		});
+	}
 	eachPresent(form, "factType", (index) => {
 		const type = controlValue(form, `factType${index}`);
 		const title = FACT_TYPE_TITLE[type] || type;
 		if (type === "DEAT") {
-			const cause =
-				controlValue(form, `causeOfDeath${index}`) || controlValue(form, `factHeader${index}`);
-			pushFact(facts, "Cause of Death", cause, `causeOfDeath${index}`);
+			pushFact(
+				facts,
+				"Cause of Death",
+				controlValue(form, `causeOfDeath${index}`),
+				`causeOfDeath${index}`
+			);
 		}
 		if (title === "Birth" || title === "Death" || title === "Marriage") {
+			pushFact(facts, title, controlValue(form, `factHeader${index}`), `factHeader${index}`);
 			return;
 		}
 		if (namedControl(form, `factHeader${index}`) || namedControl(form, `factPlace${index}`)) {
@@ -895,6 +907,22 @@ const jobsFor = (
 					...dateFields(prefix, treeParts.date),
 					{ id: placeId, value: treeParts.place || treeParts.description || "" },
 				],
+			}),
+		];
+	}
+	if (key === "birth" || key === "death" || key === "marriage") {
+		const types = factTypesFor(label);
+		return [
+			editorJob(personId, siteId, "facts", {
+				action: "fact",
+				types,
+				factType: types[0],
+				category: factCategory(types[0] || label),
+				genealogy: "5",
+				add: false,
+				matchYear: "",
+				matchHeader: diff.site || "",
+				header: diff.treeviz || "",
 			}),
 		];
 	}
