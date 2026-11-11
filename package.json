@@ -1,0 +1,20 @@
+{
+	"name": "@treeviz/treeviz-connector",
+	"version": "4.0.0",
+	"description": "Chrome extension that compares an Ancestry or MyHeritage person with a TreeViz tree.",
+	"private": true,
+	"license": "MIT",
+	"type": "module",
+	"repository": {
+		"type": "git",
+		"url": "git@github.com:idavidka/treeviz-connector.git"
+	},
+	"scripts": {
+		"build": "tsc -p tsconfig.json && esbuild src/background.ts --bundle --format=esm --target=es2022 --outfile=dist/background.js && esbuild src/popup.ts --bundle --format=esm --target=es2022 --outfile=dist/popup.js && esbuild src/content/ancestry.ts src/content/myheritage.ts src/content/treeviz.ts --bundle --format=iife --target=es2022 --outdir=dist/content",
+		"zip": "node scripts/pack.mjs"
+	},
+	"devDependencies": {
+		"esbuild": "^0.27.7",
+		"typescript": "^5.1.6"
+	}
+}
