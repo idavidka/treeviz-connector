@@ -37,10 +37,12 @@ const SKIP_TITLES = new Set([
 const LIFE_HEADER =
 	/^(birth|szuletes|death|halal|marriage|hazassag|baptism|burial|christening|gender|sex|name|nev|nem)\b/;
 
+const hintLine = (line: string): boolean => /(^| )hints?( |$)/.test(foldName(line));
+
 const chromeLine = (line: string): boolean => {
 	const key = foldName(line);
 	const squashed = key.replace(/\s+/g, "");
-	return SKIP_TITLES.has(key) || SKIP_TITLES.has(squashed);
+	return SKIP_TITLES.has(key) || SKIP_TITLES.has(squashed) || hintLine(line);
 };
 
 const factText = (el: HTMLElement): string => {
@@ -66,7 +68,7 @@ export const readLooseFacts = (
 			return;
 		}
 		const text = factText(el);
-		if (!text || text.length > 140 || !text.includes("\n")) {
+		if (!text || text.length > 140 || !text.includes("\n") || hintLine(text)) {
 			return;
 		}
 		if (Array.from(el.children).some((child) => factText(child as HTMLElement) === text)) {
@@ -80,7 +82,13 @@ export const readLooseFacts = (
 			return;
 		}
 		const title = lines[0].replace(/\s+edit$/i, "").trim();
-		if (!title || title.length > 40 || chromeLine(title) || LIFE_HEADER.test(foldName(title))) {
+		if (
+			!title ||
+			title.length > 40 ||
+			chromeLine(title) ||
+			hintLine(title) ||
+			LIFE_HEADER.test(foldName(title))
+		) {
 			return;
 		}
 		if (

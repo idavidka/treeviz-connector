@@ -1128,10 +1128,11 @@
     "stay tuned"
   ]);
   var LIFE_HEADER = /^(birth|szuletes|death|halal|marriage|hazassag|baptism|burial|christening|gender|sex|name|nev|nem)\b/;
+  var hintLine = (line) => /(^| )hints?( |$)/.test(foldName(line));
   var chromeLine = (line) => {
     const key = foldName(line);
     const squashed = key.replace(/\s+/g, "");
-    return SKIP_TITLES.has(key) || SKIP_TITLES.has(squashed);
+    return SKIP_TITLES.has(key) || SKIP_TITLES.has(squashed) || hintLine(line);
   };
   var factText = (el) => {
     const clone = el.cloneNode(true);
@@ -1149,7 +1150,7 @@
         return;
       }
       const text = factText(el);
-      if (!text || text.length > 140 || !text.includes("\n")) {
+      if (!text || text.length > 140 || !text.includes("\n") || hintLine(text)) {
         return;
       }
       if (Array.from(el.children).some((child) => factText(child) === text)) {
@@ -1160,7 +1161,7 @@
         return;
       }
       const title = lines2[0].replace(/\s+edit$/i, "").trim();
-      if (!title || title.length > 40 || chromeLine(title) || LIFE_HEADER.test(foldName(title))) {
+      if (!title || title.length > 40 || chromeLine(title) || hintLine(title) || LIFE_HEADER.test(foldName(title))) {
         return;
       }
       if (/\bof\s+(?:a\s+|an\s+|the\s+)?(?:son|daughter|child|father|mother|husband|wife|spouse|parent)\b/i.test(
@@ -1574,9 +1575,28 @@ ${body}`;
     });
     return best?.value;
   };
+  var LIVING_STATUS = /* @__PURE__ */ new Set([
+    "living",
+    "alive",
+    "el",
+    "lebt",
+    "lebend",
+    "vivant",
+    "vivo",
+    "viva",
+    "vivante"
+  ]);
+  var isLivingStatus = (value) => LIVING_STATUS.has(foldName(value));
   var splitFactLine = (value) => {
-    if (!value) {
+    if (!value || isLivingStatus(value)) {
       return {};
+    }
+    if (/[•·]/.test(value)) {
+      const [date, ...rest] = value.split(/\s*[•·]\s*/);
+      if (isLivingStatus(date)) {
+        return { place: rest.join(", ").trim() || void 0 };
+      }
+      return { date: date.trim(), place: rest.join(", ").trim() || void 0 };
     }
     if (/\d{3,4}/.test(value) && value.includes(",")) {
       const [date, ...rest] = value.split(",");
@@ -1586,6 +1606,82 @@ ${body}`;
       return { date: value };
     }
     return { place: value };
+  };
+  var LIFE_LABELS = {
+    birth: ["birth", "szuletes", "geburt", "naissance", "nacimiento", "nascita"],
+    death: ["death", "halal", "tod", "deces", "defuncion", "morte"],
+    marriage: ["marriage", "hazassag", "heirat", "mariage", "matrimonio", "casamiento"]
+  };
+  var lifeKind = (label2) => {
+    const key = foldName(label2);
+    for (const [kind, names] of Object.entries(LIFE_LABELS)) {
+      if (names.includes(key)) {
+        return kind;
+      }
+    }
+    return void 0;
+  };
+  var looksLikeLifeValue = (value) => /\d{4}/.test(value) || /[•·]/.test(value) || isLivingStatus(value) || value.includes(",");
+  var readVisibleLife = () => {
+    const found = {};
+    const keep = (kind, raw) => {
+      if (found[kind]?.date) {
+        return;
+      }
+      const lines2 = raw.split("\n").map((line) => line.trim()).filter((line) => line && !/^(explore|search|add|edit|filter|add fact)$/i.test(line));
+      const parsed = splitFactLine(lines2.join(" "));
+      if (!parsed.date && !parsed.place) {
+        return;
+      }
+      if (!found[kind] || parsed.date) {
+        found[kind] = parsed;
+      }
+    };
+    document.querySelectorAll("div, span, p, li, h2, h3, dt, dd").forEach((node) => {
+      const el = node;
+      if (el.closest("#treeviz-connector-root")) {
+        return;
+      }
+      const text = el.innerText?.trim() ?? "";
+      if (!text || text.length > 180) {
+        return;
+      }
+      if (Array.from(el.children).some((child) => child.innerText?.trim() === text)) {
+        return;
+      }
+      const childHasLifeLabel = Array.from(el.querySelectorAll("div, span, p, li")).some((child) => {
+        const childText = child.innerText?.trim() ?? "";
+        const first = childText.replace(/\s+/g, " ").split(" ")[0] ?? "";
+        return Boolean(childText) && childText.length < text.length && lifeKind(first);
+      });
+      if (childHasLifeLabel) {
+        return;
+      }
+      const flat = text.replace(/\s+/g, " ").trim();
+      const labeled = flat.match(/^(\p{L}+)\s+(.+)$/u);
+      if (labeled) {
+        const kind2 = lifeKind(labeled[1]);
+        if (kind2 && looksLikeLifeValue(labeled[2])) {
+          keep(kind2, labeled[2]);
+          return;
+        }
+      }
+      const kind = lifeKind(flat);
+      const next = el.nextElementSibling;
+      if (!kind || !(next instanceof HTMLElement)) {
+        return;
+      }
+      const value = next.innerText?.trim() ?? "";
+      if (!value || value.length > 180 || !looksLikeLifeValue(value)) {
+        return;
+      }
+      keep(kind, value);
+    });
+    return {
+      birth: found.birth ?? {},
+      death: found.death ?? {},
+      marriage: found.marriage ?? {}
+    };
   };
   var profileHeading = () => {
     const heading = document.querySelector("h1");
@@ -1657,16 +1753,17 @@ ${body}`;
     const looseMarriage = splitFactLine(
       valueUnderLabel(["marriage", "h\xE1zass\xE1g", "hazassag", "heirat", "mariage", "matrimonio"])
     );
+    const life = readVisibleLife();
     return {
       layoutKnown,
       name: name?.subtitle || headerName() || valueUnderLabel(["name", "n\xE9v", "nev", "nom", "nombre"]),
       sex: sex?.subtitle || headerSex() || valueUnderLabel(["gender", "sex", "nem", "geschlecht", "sexe", "sexo"]),
-      birthDate: birth?.date || looseBirth.date,
-      birthPlace: birth?.place || looseBirth.place,
-      deathDate: death?.date || looseDeath.date,
-      deathPlace: death?.place || looseDeath.place,
-      marriageDate: marriage?.date || looseMarriage.date,
-      marriagePlace: marriage?.place || looseMarriage.place
+      birthDate: birth?.date || life.birth.date || looseBirth.date,
+      birthPlace: birth?.place || life.birth.place || looseBirth.place,
+      deathDate: death?.date || life.death.date || looseDeath.date,
+      deathPlace: death?.place || life.death.place || looseDeath.place,
+      marriageDate: marriage?.date || life.marriage.date || looseMarriage.date,
+      marriagePlace: marriage?.place || life.marriage.place || looseMarriage.place
     };
   };
   var writableOnAncestry = (key) => ancestryLayoutKnown(document) && (key === "birthDate" || key === "birthPlace" || key === "deathDate" || key === "deathPlace" || key === "marriageDate" || key === "marriagePlace");

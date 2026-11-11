@@ -32,10 +32,11 @@ const SKIP_TITLES = new Set([
 ]);
 /** Life-event headers already compared on their own rows, e.g. "BIRTH ABT. 1785". */
 const LIFE_HEADER = /^(birth|szuletes|death|halal|marriage|hazassag|baptism|burial|christening|gender|sex|name|nev|nem)\b/;
+const hintLine = (line) => /(^| )hints?( |$)/.test(foldName(line));
 const chromeLine = (line) => {
     const key = foldName(line);
     const squashed = key.replace(/\s+/g, "");
-    return SKIP_TITLES.has(key) || SKIP_TITLES.has(squashed);
+    return SKIP_TITLES.has(key) || SKIP_TITLES.has(squashed) || hintLine(line);
 };
 const factText = (el) => {
     const clone = el.cloneNode(true);
@@ -54,7 +55,7 @@ export const readLooseFacts = (doc, skipWithin) => {
             return;
         }
         const text = factText(el);
-        if (!text || text.length > 140 || !text.includes("\n")) {
+        if (!text || text.length > 140 || !text.includes("\n") || hintLine(text)) {
             return;
         }
         if (Array.from(el.children).some((child) => factText(child) === text)) {
@@ -68,7 +69,11 @@ export const readLooseFacts = (doc, skipWithin) => {
             return;
         }
         const title = lines[0].replace(/\s+edit$/i, "").trim();
-        if (!title || title.length > 40 || chromeLine(title) || LIFE_HEADER.test(foldName(title))) {
+        if (!title ||
+            title.length > 40 ||
+            chromeLine(title) ||
+            hintLine(title) ||
+            LIFE_HEADER.test(foldName(title))) {
             return;
         }
         if (/\bof\s+(?:a\s+|an\s+|the\s+)?(?:son|daughter|child|father|mother|husband|wife|spouse|parent)\b/i.test(title)) {

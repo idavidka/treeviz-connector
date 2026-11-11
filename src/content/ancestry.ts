@@ -48,9 +48,30 @@ const valueUnderLabel = (labels: string[]): string | undefined => {
 	return best?.value;
 };
 
+const LIVING_STATUS = new Set([
+	"living",
+	"alive",
+	"el",
+	"lebt",
+	"lebend",
+	"vivant",
+	"vivo",
+	"viva",
+	"vivante",
+]);
+
+const isLivingStatus = (value?: string): boolean => LIVING_STATUS.has(foldName(value));
+
 const splitFactLine = (value?: string): { date?: string; place?: string } => {
-	if (!value) {
+	if (!value || isLivingStatus(value)) {
 		return {};
+	}
+	if (/[•·]/.test(value)) {
+		const [date, ...rest] = value.split(/\s*[•·]\s*/);
+		if (isLivingStatus(date)) {
+			return { place: rest.join(", ").trim() || undefined };
+		}
+		return { date: date.trim(), place: rest.join(", ").trim() || undefined };
 	}
 	if (/\d{3,4}/.test(value) && value.includes(",")) {
 		const [date, ...rest] = value.split(",");
@@ -60,6 +81,98 @@ const splitFactLine = (value?: string): { date?: string; place?: string } => {
 		return { date: value };
 	}
 	return { place: value };
+};
+
+const LIFE_LABELS: Record<"birth" | "death" | "marriage", string[]> = {
+	birth: ["birth", "szuletes", "geburt", "naissance", "nacimiento", "nascita"],
+	death: ["death", "halal", "tod", "deces", "defuncion", "morte"],
+	marriage: ["marriage", "hazassag", "heirat", "mariage", "matrimonio", "casamiento"],
+};
+
+const lifeKind = (label: string): "birth" | "death" | "marriage" | undefined => {
+	const key = foldName(label);
+	for (const [kind, names] of Object.entries(LIFE_LABELS) as Array<
+		["birth" | "death" | "marriage", string[]]
+	>) {
+		if (names.includes(key)) {
+			return kind;
+		}
+	}
+	return undefined;
+};
+
+const looksLikeLifeValue = (value: string): boolean =>
+	/\d{4}/.test(value) || /[•·]/.test(value) || isLivingStatus(value) || value.includes(",");
+
+/** Birth, death, and marriage from the person header and the timeline cards. */
+const readVisibleLife = (): {
+	birth: { date?: string; place?: string };
+	death: { date?: string; place?: string };
+	marriage: { date?: string; place?: string };
+} => {
+	const found: Partial<Record<"birth" | "death" | "marriage", { date?: string; place?: string }>> =
+		{};
+	const keep = (kind: "birth" | "death" | "marriage", raw: string) => {
+		if (found[kind]?.date) {
+			return;
+		}
+		const lines = raw
+			.split("\n")
+			.map((line) => line.trim())
+			.filter((line) => line && !/^(explore|search|add|edit|filter|add fact)$/i.test(line));
+		const parsed = splitFactLine(lines.join(" "));
+		if (!parsed.date && !parsed.place) {
+			return;
+		}
+		if (!found[kind] || parsed.date) {
+			found[kind] = parsed;
+		}
+	};
+	document.querySelectorAll("div, span, p, li, h2, h3, dt, dd").forEach((node) => {
+		const el = node as HTMLElement;
+		if (el.closest("#treeviz-connector-root")) {
+			return;
+		}
+		const text = el.innerText?.trim() ?? "";
+		if (!text || text.length > 180) {
+			return;
+		}
+		if (Array.from(el.children).some((child) => (child as HTMLElement).innerText?.trim() === text)) {
+			return;
+		}
+		const childHasLifeLabel = Array.from(el.querySelectorAll("div, span, p, li")).some((child) => {
+			const childText = (child as HTMLElement).innerText?.trim() ?? "";
+			const first = childText.replace(/\s+/g, " ").split(" ")[0] ?? "";
+			return Boolean(childText) && childText.length < text.length && lifeKind(first);
+		});
+		if (childHasLifeLabel) {
+			return;
+		}
+		const flat = text.replace(/\s+/g, " ").trim();
+		const labeled = flat.match(/^(\p{L}+)\s+(.+)$/u);
+		if (labeled) {
+			const kind = lifeKind(labeled[1]);
+			if (kind && looksLikeLifeValue(labeled[2])) {
+				keep(kind, labeled[2]);
+				return;
+			}
+		}
+		const kind = lifeKind(flat);
+		const next = el.nextElementSibling;
+		if (!kind || !(next instanceof HTMLElement)) {
+			return;
+		}
+		const value = next.innerText?.trim() ?? "";
+		if (!value || value.length > 180 || !looksLikeLifeValue(value)) {
+			return;
+		}
+		keep(kind, value);
+	});
+	return {
+		birth: found.birth ?? {},
+		death: found.death ?? {},
+		marriage: found.marriage ?? {},
+	};
 };
 
 const profileHeading = (): HTMLElement | undefined => {
@@ -140,16 +253,17 @@ const siteFacts = (): SiteFacts => {
 	const looseMarriage = splitFactLine(
 		valueUnderLabel(["marriage", "házasság", "hazassag", "heirat", "mariage", "matrimonio"])
 	);
+	const life = readVisibleLife();
 	return {
 		layoutKnown,
 		name: name?.subtitle || headerName() || valueUnderLabel(["name", "név", "nev", "nom", "nombre"]),
 		sex: sex?.subtitle || headerSex() || valueUnderLabel(["gender", "sex", "nem", "geschlecht", "sexe", "sexo"]),
-		birthDate: birth?.date || looseBirth.date,
-		birthPlace: birth?.place || looseBirth.place,
-		deathDate: death?.date || looseDeath.date,
-		deathPlace: death?.place || looseDeath.place,
-		marriageDate: marriage?.date || looseMarriage.date,
-		marriagePlace: marriage?.place || looseMarriage.place,
+		birthDate: birth?.date || life.birth.date || looseBirth.date,
+		birthPlace: birth?.place || life.birth.place || looseBirth.place,
+		deathDate: death?.date || life.death.date || looseDeath.date,
+		deathPlace: death?.place || life.death.place || looseDeath.place,
+		marriageDate: marriage?.date || life.marriage.date || looseMarriage.date,
+		marriagePlace: marriage?.place || life.marriage.place || looseMarriage.place,
 	};
 };
 
