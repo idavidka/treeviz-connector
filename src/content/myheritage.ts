@@ -329,17 +329,14 @@ const readEditorSections = (
 		pushFact(facts, title, controlValue(form, name), name);
 	}
 	eachPresent(form, "citationSource", (index) => {
-		pushFact(
-			facts,
-			"Citation",
-			joinParts([
-				controlValue(form, `citationSource${index}`),
-				controlValue(form, `citationDescription${index}`),
-				controlValue(form, `citationPage${index}`),
-				composedDate(`citationDate${index}`, form),
-			]),
-			`citationDescription${index}`
+		const source = controlValue(form, `citationSource${index}`);
+		const description = controlValue(form, `citationDescription${index}`);
+		const page = controlValue(form, `citationPage${index}`);
+		const date = composedDate(`citationDate${index}`, form);
+		const chosen = [source, description, page, date].filter(
+			(part) => part && !/^-?\d+$/.test(part)
 		);
+		pushFact(facts, "Citation", chosen.join(", "), `citationDescription${index}`);
 	});
 	eachPresent(form, "factType", (index) => {
 		const type = controlValue(form, `factType${index}`);
@@ -372,17 +369,43 @@ const readEditorSections = (
 		}
 	}
 	if (step === "family") {
-		const spouse = form.querySelector("[name='relationshipWithSpouse0']");
+		const anchors = Array.from(form.querySelectorAll("a[name^='parents'], a[name^='spouse']"));
 		for (const label of Array.from(form.querySelectorAll(".FL_Label"))) {
-			const name = label.textContent?.trim() || "";
-			if (!name) {
+			const role = label.nextElementSibling;
+			if (!(role instanceof Element) || !role.classList.contains("FL_LabelDimmed")) {
 				continue;
 			}
-			const beforeSpouse = Boolean(
-				spouse &&
-					(label.compareDocumentPosition(spouse) & Node.DOCUMENT_POSITION_FOLLOWING)
-			);
-			relatives[beforeSpouse || !spouse ? "parents" : "spouses"].push(name);
+			const name = label.textContent?.replace(/\s+/g, " ").trim() || "";
+			const folded = name
+				.normalize("NFD")
+				.replace(/\p{Diacritic}/gu, "")
+				.toLocaleLowerCase();
+			if (!name || name.length > 80 || /betoltes folyamatban|^loading\b|^tipp:/.test(folded)) {
+				continue;
+			}
+			const roleText = (role.textContent || "")
+				.normalize("NFD")
+				.replace(/\p{Diacritic}/gu, "")
+				.toLocaleLowerCase();
+			const roleKind = /father|mother|parent|apa|anya|apja|anyja|vater|mutter|pere|mere|padre|madre/.test(
+				roleText
+			)
+				? "parents"
+				: /husband|wife|spouse|partner|ferj|feleseg|hazastars|gatte|epoux|ehepartner|esposo|conyuge/.test(
+						roleText
+					)
+					? "spouses"
+					: undefined;
+			let kind: "parents" | "spouses" = roleKind ?? "parents";
+			if (!roleKind) {
+				for (const anchor of anchors) {
+					if (anchor.compareDocumentPosition(label) & Node.DOCUMENT_POSITION_FOLLOWING) {
+						const marker = anchor.getAttribute("name") || "";
+						kind = marker.startsWith("spouse") ? "spouses" : "parents";
+					}
+				}
+			}
+			relatives[kind].push(name);
 		}
 	}
 	return { facts, relatives };

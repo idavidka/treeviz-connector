@@ -151,7 +151,7 @@ export const samePersonName = (left?: string, right?: string): boolean => {
 };
 
 const dateChunk = (): RegExp =>
-	/\b(?:bef|before|abt|about|aft|after|cir|circa|est|cal)\.?\s+\d{4}\b|\b\d{1,2}\s+[a-z]{3,}\.?\s+\d{4}\b|\b[a-z]{3,}\.?\s+\d{4}\b|\b\d{1,2}[./-]\d{1,2}[./-]\d{4}\b|\b\d{4}\b/gi;
+	/\b(?:bef|before|abt|about|aft|after|cir|circa|est|cal)\.?\s+\d{1,2}\s+\d{1,2}\s+\d{4}\b|\b(?:bef|before|abt|about|aft|after|cir|circa|est|cal)\.?\s+\d{4}\b|\b\d{1,2}\s+\d{1,2}\s+\d{4}\b|\b\d{1,2}\s+[a-z]{3,}\.?\s+\d{4}\b|\b[a-z]{3,}\.?\s+\d{4}\b|\b\d{1,2}[./-]\d{1,2}[./-]\d{4}\b|\b\d{4}\b/gi;
 
 const factDates = (value?: string): string[] => {
 	const found = collapse(value).match(dateChunk()) ?? [];
@@ -254,6 +254,17 @@ const withoutDates = (value?: string): string =>
 		.replace(dateChunk(), " ")
 		.replace(/https?:\/\/\S+/gi, " ");
 
+/** Same words in any order, so "date, place, title" matches "title, place, date". */
+const sameWords = (left: string, right: string): boolean => {
+	const key = (value: string) => foldName(value).split(" ").filter(Boolean).sort().join(" ");
+	const a = key(left);
+	const b = key(right);
+	if (!a || !b) {
+		return false;
+	}
+	return a === b || a.includes(b) || b.includes(a);
+};
+
 export const factUrls = (value?: string): string[] => {
 	const found = collapse(value).match(/https?:\/\/[^\s]+/gi) ?? [];
 	return found.map((href) => {
@@ -308,23 +319,16 @@ export const sameFactValue = (left?: string, right?: string): boolean => {
 	) {
 		return false;
 	}
-	const textLeft = foldName(withoutDates(left));
-	const textRight = foldName(withoutDates(right));
-	if (!textLeft || !textRight) {
+	const textLeft = withoutDates(left);
+	const textRight = withoutDates(right);
+	if (!foldName(textLeft) || !foldName(textRight)) {
 		return Boolean(datesLeft.length && datesRight.length);
 	}
-	return textLeft === textRight || textLeft.includes(textRight) || textRight.includes(textLeft);
+	return sameWords(textLeft, textRight);
 };
 
 /** Same wording once the dates are removed, so one award with two years stays one row. */
-export const sameFactText = (left?: string, right?: string): boolean => {
-	const textLeft = foldName(withoutDates(left));
-	const textRight = foldName(withoutDates(right));
-	if (!textLeft || !textRight) {
-		return false;
-	}
-	return textLeft === textRight || textLeft.includes(textRight) || textRight.includes(textLeft);
-};
+export const sameFactText = (left?: string, right?: string): boolean => sameWords(withoutDates(left), withoutDates(right));
 
 export const diffFactValues = (
 	siteFacts: ConnectorFact[],
