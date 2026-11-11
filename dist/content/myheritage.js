@@ -323,6 +323,7 @@
     persons: "{{count}} szem\xE9ly",
     log: "Napl\xF3",
     copyLog: "Napl\xF3 m\xE1sol\xE1sa",
+    checkPage: "Oldal ellen\u0151rz\xE9se",
     copiedLog: "Napl\xF3 a v\xE1g\xF3lapon."
   };
   var EN = {
@@ -382,6 +383,7 @@
     persons: "{{count}} people",
     log: "Log",
     copyLog: "Copy log",
+    checkPage: "Check this page",
     copiedLog: "Log copied."
   };
   var DE = {
@@ -441,6 +443,7 @@
     persons: "{{count}} Personen",
     log: "Protokoll",
     copyLog: "Protokoll kopieren",
+    checkPage: "Diese Seite pr\xFCfen",
     copiedLog: "Protokoll ist in der Zwischenablage."
   };
   var FR = {
@@ -500,6 +503,7 @@
     persons: "{{count}} personnes",
     log: "Journal",
     copyLog: "Copier le journal",
+    checkPage: "V\xE9rifier cette page",
     copiedLog: "Journal copi\xE9."
   };
   var ES = {
@@ -559,6 +563,7 @@
     persons: "{{count}} personas",
     log: "Registro",
     copyLog: "Copiar registro",
+    checkPage: "Comprobar esta p\xE1gina",
     copiedLog: "Registro copiado."
   };
   var RU = {
@@ -618,6 +623,7 @@
     persons: "{{count}} \u0447\u0435\u043B.",
     log: "\u0416\u0443\u0440\u043D\u0430\u043B",
     copyLog: "\u041A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0436\u0443\u0440\u043D\u0430\u043B",
+    checkPage: "\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u044D\u0442\u0443 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443",
     copiedLog: "\u0416\u0443\u0440\u043D\u0430\u043B \u0441\u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D."
   };
   var JA = {
@@ -677,6 +683,7 @@
     persons: "{{count}} \u4EBA",
     log: "\u30ED\u30B0",
     copyLog: "\u30ED\u30B0\u3092\u30B3\u30D4\u30FC",
+    checkPage: "\u3053\u306E\u30DA\u30FC\u30B8\u3092\u78BA\u8A8D",
     copiedLog: "\u30ED\u30B0\u3092\u30B3\u30D4\u30FC\u3057\u305F\u3002"
   };
   var ZH = {
@@ -736,6 +743,7 @@
     persons: "{{count}} \u4EBA",
     log: "\u65E5\u5FD7",
     copyLog: "\u590D\u5236\u65E5\u5FD7",
+    checkPage: "\u68C0\u67E5\u6B64\u9875\u9762",
     copiedLog: "\u65E5\u5FD7\u5DF2\u590D\u5236\u3002"
   };
   var LANGUAGES = ["hu", "en", "de", "fr", "es", "ru", "ja", "zh"];
@@ -1241,6 +1249,41 @@
   });
   var patchPanel = (partial) => {
     showPanel({ ...current, ...partial });
+  };
+
+  // extensions/treeviz-connector/src/probe.ts
+  var htmlSkeleton = (root, limit = 7e3) => {
+    const lines2 = [];
+    const walk = (node, depth) => {
+      if (depth > 7 || lines2.join("\n").length > limit) {
+        return;
+      }
+      const id = node.id ? `#${node.id}` : "";
+      const name = node.getAttribute("name");
+      const type = node.getAttribute("type");
+      const className = typeof node.className === "string" ? node.className.trim().split(/\s+/).filter(Boolean).slice(0, 3) : [];
+      const cls = className.length ? `.${className.join(".")}` : "";
+      lines2.push(
+        `${"  ".repeat(depth)}<${node.tagName.toLowerCase()}${id}${name ? `[name=${name}]` : ""}${type ? `[type=${type}]` : ""}${cls}>`
+      );
+      for (const child of Array.from(node.children).slice(0, 30)) {
+        walk(child, depth + 1);
+      }
+    };
+    if (root instanceof Element) {
+      walk(root, 0);
+    }
+    return lines2.join("\n").slice(0, limit);
+  };
+  var formatProbe = (title, lines2, html) => {
+    const body = lines2.map(
+      (line) => `${line.ok ? "ok" : "MISSING"} ${line.name}${line.detail ? ` ${line.detail}` : ""}`
+    ).join("\n");
+    return html ? `${title}
+${body}
+--- html ---
+${html}` : `${title}
+${body}`;
   };
 
   // extensions/treeviz-connector/src/content/myheritage.ts
@@ -1955,5 +1998,95 @@
       href = "";
       tick();
     });
+  });
+  var EDITOR_STEPS = [
+    { step: "essentials", anyOf: ["firstName", "lastName"] },
+    { step: "family", anyOf: [] },
+    { step: "contact", anyOf: ["contactEmail0", "contactPhone0", "addressAddressOne0"] },
+    { step: "work", anyOf: ["workHeader0"] },
+    { step: "education", anyOf: ["educationHeader0"] },
+    { step: "favorites", anyOf: ["favoriteInterestsHeader"] },
+    { step: "personal", anyOf: ["religion", "height", "hairColor"] },
+    { step: "citations", anyOf: ["citationSource0", "citationDescription0"] },
+    { step: "facts", anyOf: ["factType0"] },
+    { step: "biography", anyOf: [] }
+  ];
+  var probeMyHeritage = async () => {
+    if (!onEditorPage()) {
+      const report2 = formatProbe(
+        `myheritage ${location.pathname}`,
+        [{ ok: false, name: "edit-profile.php" }],
+        htmlSkeleton(document.body)
+      );
+      connectorLog("probe", report2);
+      return report2;
+    }
+    const lines2 = [];
+    let html = "";
+    for (const step of EDITOR_STEPS) {
+      const url = new URL(location.href);
+      url.searchParams.set("step", step.step);
+      let doc = document;
+      if (editorStep() !== step.step) {
+        try {
+          const response = await fetch(url.toString(), { credentials: "include" });
+          const text = await response.text();
+          doc = new DOMParser().parseFromString(text, "text/html");
+          lines2.push({ ok: response.ok, name: `${step.step} fetch`, detail: String(response.status) });
+        } catch (error) {
+          lines2.push({
+            ok: false,
+            name: `${step.step} fetch`,
+            detail: error instanceof Error ? error.message : "failed"
+          });
+          continue;
+        }
+      }
+      const form = doc.querySelector("#editProfileForm");
+      lines2.push({ ok: form instanceof HTMLFormElement, name: `${step.step} #editProfileForm` });
+      if (!(form instanceof HTMLFormElement)) {
+        html += `
+[${step.step}]
+${htmlSkeleton(doc.body)}`;
+        continue;
+      }
+      if (step.step === "family") {
+        const labels = form.querySelectorAll(".FL_Label").length;
+        lines2.push({ ok: true, name: "family .FL_Label", detail: String(labels) });
+        continue;
+      }
+      if (step.step === "biography") {
+        const area = form.querySelector("textarea");
+        lines2.push({ ok: area instanceof HTMLTextAreaElement, name: "biography textarea" });
+        if (!(area instanceof HTMLTextAreaElement)) {
+          html += `
+[biography]
+${htmlSkeleton(form)}`;
+        }
+        continue;
+      }
+      const found = step.anyOf.filter((name) => form.querySelector(`[name="${CSS.escape(name)}"]`));
+      lines2.push({
+        ok: found.length > 0,
+        name: step.step,
+        detail: found.length ? found.join(",") : `expected ${step.anyOf.join("|")}`
+      });
+      if (!found.length) {
+        html += `
+[${step.step}]
+${htmlSkeleton(form)}`;
+      }
+    }
+    const report = formatProbe(`myheritage ${location.pathname}`, lines2, html || void 0);
+    connectorLog("probe", report);
+    return report;
+  };
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    const body = message;
+    if (body?.type !== "connector:probe") {
+      return;
+    }
+    void probeMyHeritage().then((report) => sendResponse({ ok: true, report }));
+    return true;
   });
 })();

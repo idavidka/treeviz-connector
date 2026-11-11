@@ -11,6 +11,8 @@ const status = document.querySelector("#status");
 const trees = document.querySelector("#trees");
 const openButton = document.querySelector("#open");
 const showButton = document.querySelector("#show");
+const checkButton = document.querySelector("#check");
+const report = document.querySelector("#report");
 const note = document.querySelector("#note");
 const language = document.querySelector("#language");
 if (language instanceof HTMLSelectElement) {
@@ -44,6 +46,9 @@ const render = () => {
     if (showButton) {
         showButton.textContent = t("showPanel");
     }
+    if (checkButton) {
+        checkButton.textContent = t("checkPage");
+    }
     chrome.storage.local.get(INDEX_KEY, (items) => {
         const index = items[INDEX_KEY];
         if (!status || !trees) {
@@ -71,6 +76,29 @@ const render = () => {
 void languageReady.then(() => {
     render();
     onLanguage(render);
+});
+checkButton?.addEventListener("click", () => {
+    void chrome.tabs.query({ active: true, currentWindow: true }).then(async (found) => {
+        const tabId = found[0]?.id;
+        if (!(report instanceof HTMLElement)) {
+            return;
+        }
+        report.hidden = false;
+        if (tabId == null) {
+            report.textContent = t("panelMissing");
+            return;
+        }
+        report.textContent = "…";
+        try {
+            const response = (await chrome.tabs.sendMessage(tabId, {
+                type: "connector:probe",
+            }));
+            report.textContent = response?.report || t("panelMissing");
+        }
+        catch {
+            report.textContent = t("panelMissing");
+        }
+    });
 });
 showButton?.addEventListener("click", () => {
     void chrome.tabs.query({ active: true, currentWindow: true }).then(async (found) => {

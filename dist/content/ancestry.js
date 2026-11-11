@@ -568,6 +568,7 @@
     persons: "{{count}} szem\xE9ly",
     log: "Napl\xF3",
     copyLog: "Napl\xF3 m\xE1sol\xE1sa",
+    checkPage: "Oldal ellen\u0151rz\xE9se",
     copiedLog: "Napl\xF3 a v\xE1g\xF3lapon."
   };
   var EN = {
@@ -627,6 +628,7 @@
     persons: "{{count}} people",
     log: "Log",
     copyLog: "Copy log",
+    checkPage: "Check this page",
     copiedLog: "Log copied."
   };
   var DE = {
@@ -686,6 +688,7 @@
     persons: "{{count}} Personen",
     log: "Protokoll",
     copyLog: "Protokoll kopieren",
+    checkPage: "Diese Seite pr\xFCfen",
     copiedLog: "Protokoll ist in der Zwischenablage."
   };
   var FR = {
@@ -745,6 +748,7 @@
     persons: "{{count}} personnes",
     log: "Journal",
     copyLog: "Copier le journal",
+    checkPage: "V\xE9rifier cette page",
     copiedLog: "Journal copi\xE9."
   };
   var ES = {
@@ -804,6 +808,7 @@
     persons: "{{count}} personas",
     log: "Registro",
     copyLog: "Copiar registro",
+    checkPage: "Comprobar esta p\xE1gina",
     copiedLog: "Registro copiado."
   };
   var RU = {
@@ -863,6 +868,7 @@
     persons: "{{count}} \u0447\u0435\u043B.",
     log: "\u0416\u0443\u0440\u043D\u0430\u043B",
     copyLog: "\u041A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u0442\u044C \u0436\u0443\u0440\u043D\u0430\u043B",
+    checkPage: "\u041F\u0440\u043E\u0432\u0435\u0440\u0438\u0442\u044C \u044D\u0442\u0443 \u0441\u0442\u0440\u0430\u043D\u0438\u0446\u0443",
     copiedLog: "\u0416\u0443\u0440\u043D\u0430\u043B \u0441\u043A\u043E\u043F\u0438\u0440\u043E\u0432\u0430\u043D."
   };
   var JA = {
@@ -922,6 +928,7 @@
     persons: "{{count}} \u4EBA",
     log: "\u30ED\u30B0",
     copyLog: "\u30ED\u30B0\u3092\u30B3\u30D4\u30FC",
+    checkPage: "\u3053\u306E\u30DA\u30FC\u30B8\u3092\u78BA\u8A8D",
     copiedLog: "\u30ED\u30B0\u3092\u30B3\u30D4\u30FC\u3057\u305F\u3002"
   };
   var ZH = {
@@ -981,6 +988,7 @@
     persons: "{{count}} \u4EBA",
     log: "\u65E5\u5FD7",
     copyLog: "\u590D\u5236\u65E5\u5FD7",
+    checkPage: "\u68C0\u67E5\u6B64\u9875\u9762",
     copiedLog: "\u65E5\u5FD7\u5DF2\u590D\u5236\u3002"
   };
   var LANGUAGES = ["hu", "en", "de", "fr", "es", "ru", "ja", "zh"];
@@ -1510,6 +1518,41 @@
   });
   var patchPanel = (partial) => {
     showPanel({ ...current, ...partial });
+  };
+
+  // extensions/treeviz-connector/src/probe.ts
+  var htmlSkeleton = (root, limit = 7e3) => {
+    const lines2 = [];
+    const walk = (node, depth) => {
+      if (depth > 7 || lines2.join("\n").length > limit) {
+        return;
+      }
+      const id = node.id ? `#${node.id}` : "";
+      const name = node.getAttribute("name");
+      const type = node.getAttribute("type");
+      const className = typeof node.className === "string" ? node.className.trim().split(/\s+/).filter(Boolean).slice(0, 3) : [];
+      const cls = className.length ? `.${className.join(".")}` : "";
+      lines2.push(
+        `${"  ".repeat(depth)}<${node.tagName.toLowerCase()}${id}${name ? `[name=${name}]` : ""}${type ? `[type=${type}]` : ""}${cls}>`
+      );
+      for (const child of Array.from(node.children).slice(0, 30)) {
+        walk(child, depth + 1);
+      }
+    };
+    if (root instanceof Element) {
+      walk(root, 0);
+    }
+    return lines2.join("\n").slice(0, limit);
+  };
+  var formatProbe = (title, lines2, html) => {
+    const body = lines2.map(
+      (line) => `${line.ok ? "ok" : "MISSING"} ${line.name}${line.detail ? ` ${line.detail}` : ""}`
+    ).join("\n");
+    return html ? `${title}
+${body}
+--- html ---
+${html}` : `${title}
+${body}`;
   };
 
   // extensions/treeviz-connector/src/content/ancestry.ts
@@ -2274,12 +2317,52 @@
     href = window.location.href;
     void renderMatch().then(() => runBatch());
   };
-  chrome.runtime.onMessage.addListener((message) => {
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     const body = message;
     if (body?.type === "connector:run-batch") {
       void runBatch();
+      return;
+    }
+    if (body?.type === "connector:probe") {
+      const report = probeAncestry();
+      connectorLog("probe", report);
+      sendResponse({ ok: true, report });
     }
   });
+  var probeAncestry = () => {
+    const facts = document.querySelector("#researchListFacts");
+    const lines2 = [
+      { ok: Boolean(facts), name: "#researchListFacts" }
+    ];
+    if (facts) {
+      const cards = facts.querySelectorAll("li.researchListItem");
+      lines2.push({
+        ok: cards.length > 0,
+        name: "li.researchListItem",
+        detail: String(cards.length)
+      });
+      for (const selector of [
+        ".userCardTitle",
+        ".factItemDate",
+        ".factItemLocation",
+        ".userCardSubTitle",
+        ".textWrap"
+      ]) {
+        lines2.push({
+          ok: facts.querySelector(selector) != null,
+          name: selector
+        });
+      }
+      const titles = Array.from(facts.querySelectorAll(".userCardTitle")).map((node) => node.textContent?.trim() || "").filter(Boolean).slice(0, 40);
+      lines2.push({ ok: titles.length > 0, name: "titles", detail: titles.join(", ") });
+    }
+    const failed = lines2.some((line) => !line.ok);
+    return formatProbe(
+      `ancestry ${location.pathname}`,
+      lines2,
+      failed ? htmlSkeleton(facts || document.body) : void 0
+    );
+  };
   void languageReady.then(() => {
     tick();
     window.setInterval(tick, 1e3);

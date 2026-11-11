@@ -114,6 +114,7 @@ main {
 }
 
 #show,
+#check,
 #open {
 	display: flex;
 	align-items: center;
@@ -132,11 +133,25 @@ main {
 	box-shadow: 0 8px 24px rgba(99, 102, 241, 0.28);
 }
 
-#show {
+#show,
+#check {
 	background: #ffffff;
 	color: #344054;
 	border: 1px solid #e3e6ec;
 	box-shadow: none;
+}
+
+#report {
+	max-height: 220px;
+	margin: 12px 0 0;
+	padding: 8px;
+	overflow: auto;
+	white-space: pre-wrap;
+	word-break: break-word;
+	background: #ffffff;
+	border: 1px solid #e3e6ec;
+	border-radius: 12px;
+	font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 #show:hover {

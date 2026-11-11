@@ -5,6 +5,7 @@ import { connectorLog } from "../log.js";
 import { ask, loadIndex, matchTrees, personIn, preferActive } from "../match.js";
 import { parseMyHeritageLocation } from "../parse-url.js";
 import { showPanel, patchPanel } from "../panel.js";
+import { formatProbe, htmlSkeleton, type ProbeLine } from "../probe.js";
 import type { ConnectorFact, ConnectorPerson, ConnectorTree, FieldDiff, FieldKey } from "../protocol.js";
 
 type WriteField = { id: string; value?: string; check?: boolean };
@@ -810,4 +811,91 @@ void languageReady.then(() => {
 		href = "";
 		tick();
 	});
+});
+
+const EDITOR_STEPS: Array<{ step: string; anyOf: string[] }> = [
+	{ step: "essentials", anyOf: ["firstName", "lastName"] },
+	{ step: "family", anyOf: [] },
+	{ step: "contact", anyOf: ["contactEmail0", "contactPhone0", "addressAddressOne0"] },
+	{ step: "work", anyOf: ["workHeader0"] },
+	{ step: "education", anyOf: ["educationHeader0"] },
+	{ step: "favorites", anyOf: ["favoriteInterestsHeader"] },
+	{ step: "personal", anyOf: ["religion", "height", "hairColor"] },
+	{ step: "citations", anyOf: ["citationSource0", "citationDescription0"] },
+	{ step: "facts", anyOf: ["factType0"] },
+	{ step: "biography", anyOf: [] },
+];
+
+const probeMyHeritage = async (): Promise<string> => {
+	if (!onEditorPage()) {
+		const report = formatProbe(
+			`myheritage ${location.pathname}`,
+			[{ ok: false, name: "edit-profile.php" }],
+			htmlSkeleton(document.body)
+		);
+		connectorLog("probe", report);
+		return report;
+	}
+	const lines: ProbeLine[] = [];
+	let html = "";
+	for (const step of EDITOR_STEPS) {
+		const url = new URL(location.href);
+		url.searchParams.set("step", step.step);
+		let doc = document;
+		if (editorStep() !== step.step) {
+			try {
+				const response = await fetch(url.toString(), { credentials: "include" });
+				const text = await response.text();
+				doc = new DOMParser().parseFromString(text, "text/html");
+				lines.push({ ok: response.ok, name: `${step.step} fetch`, detail: String(response.status) });
+			} catch (error) {
+				lines.push({
+					ok: false,
+					name: `${step.step} fetch`,
+					detail: error instanceof Error ? error.message : "failed",
+				});
+				continue;
+			}
+		}
+		const form = doc.querySelector("#editProfileForm");
+		lines.push({ ok: form instanceof HTMLFormElement, name: `${step.step} #editProfileForm` });
+		if (!(form instanceof HTMLFormElement)) {
+			html += `\n[${step.step}]\n${htmlSkeleton(doc.body)}`;
+			continue;
+		}
+		if (step.step === "family") {
+			const labels = form.querySelectorAll(".FL_Label").length;
+			lines.push({ ok: true, name: "family .FL_Label", detail: String(labels) });
+			continue;
+		}
+		if (step.step === "biography") {
+			const area = form.querySelector("textarea");
+			lines.push({ ok: area instanceof HTMLTextAreaElement, name: "biography textarea" });
+			if (!(area instanceof HTMLTextAreaElement)) {
+				html += `\n[biography]\n${htmlSkeleton(form)}`;
+			}
+			continue;
+		}
+		const found = step.anyOf.filter((name) => form.querySelector(`[name="${CSS.escape(name)}"]`));
+		lines.push({
+			ok: found.length > 0,
+			name: step.step,
+			detail: found.length ? found.join(",") : `expected ${step.anyOf.join("|")}`,
+		});
+		if (!found.length) {
+			html += `\n[${step.step}]\n${htmlSkeleton(form)}`;
+		}
+	}
+	const report = formatProbe(`myheritage ${location.pathname}`, lines, html || undefined);
+	connectorLog("probe", report);
+	return report;
+};
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+	const body = message as { type?: string };
+	if (body?.type !== "connector:probe") {
+		return;
+	}
+	void probeMyHeritage().then((report) => sendResponse({ ok: true, report }));
+	return true;
 });

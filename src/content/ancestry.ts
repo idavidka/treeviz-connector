@@ -12,6 +12,7 @@ import { loadIndex, matchTrees, personIn, preferActive, ask } from "../match.js"
 import { readLooseFacts } from "../page-facts.js";
 import { parseAncestryLocation } from "../parse-url.js";
 import { showPanel, patchPanel } from "../panel.js";
+import { formatProbe, htmlSkeleton, type ProbeLine } from "../probe.js";
 import type {
 	AncestryBatchPerson,
 	ConnectorFact,
@@ -925,12 +926,56 @@ const tick = (): void => {
 	void renderMatch().then(() => runBatch());
 };
 
-chrome.runtime.onMessage.addListener((message) => {
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	const body = message as { type?: string };
 	if (body?.type === "connector:run-batch") {
 		void runBatch();
+		return;
+	}
+	if (body?.type === "connector:probe") {
+		const report = probeAncestry();
+		connectorLog("probe", report);
+		sendResponse({ ok: true, report });
 	}
 });
+
+const probeAncestry = (): string => {
+	const facts = document.querySelector("#researchListFacts");
+	const lines: ProbeLine[] = [
+		{ ok: Boolean(facts), name: "#researchListFacts" },
+	];
+	if (facts) {
+		const cards = facts.querySelectorAll("li.researchListItem");
+		lines.push({
+			ok: cards.length > 0,
+			name: "li.researchListItem",
+			detail: String(cards.length),
+		});
+		for (const selector of [
+			".userCardTitle",
+			".factItemDate",
+			".factItemLocation",
+			".userCardSubTitle",
+			".textWrap",
+		]) {
+			lines.push({
+				ok: facts.querySelector(selector) != null,
+				name: selector,
+			});
+		}
+		const titles = Array.from(facts.querySelectorAll(".userCardTitle"))
+			.map((node) => node.textContent?.trim() || "")
+			.filter(Boolean)
+			.slice(0, 40);
+		lines.push({ ok: titles.length > 0, name: "titles", detail: titles.join(", ") });
+	}
+	const failed = lines.some((line) => !line.ok);
+	return formatProbe(
+		`ancestry ${location.pathname}`,
+		lines,
+		failed ? htmlSkeleton(facts || document.body) : undefined
+	);
+};
 
 void languageReady.then(() => {
 	tick();

@@ -59,6 +59,7 @@ const HU = {
 	persons: "{{count}} személy",
 	log: "Napló",
 	copyLog: "Napló másolása",
+	checkPage: "Oldal ellenőrzése",
 	copiedLog: "Napló a vágólapon.",
 };
 
@@ -122,6 +123,7 @@ const EN: typeof HU = {
 	persons: "{{count}} people",
 	log: "Log",
 	copyLog: "Copy log",
+	checkPage: "Check this page",
 	copiedLog: "Log copied.",
 };
 
@@ -185,6 +187,7 @@ const DE: typeof HU = {
 	persons: "{{count}} Personen",
 	log: "Protokoll",
 	copyLog: "Protokoll kopieren",
+	checkPage: "Diese Seite prüfen",
 	copiedLog: "Protokoll ist in der Zwischenablage.",
 };
 
@@ -248,6 +251,7 @@ const FR: typeof HU = {
 	persons: "{{count}} personnes",
 	log: "Journal",
 	copyLog: "Copier le journal",
+	checkPage: "Vérifier cette page",
 	copiedLog: "Journal copié.",
 };
 
@@ -311,6 +315,7 @@ const ES: typeof HU = {
 	persons: "{{count}} personas",
 	log: "Registro",
 	copyLog: "Copiar registro",
+	checkPage: "Comprobar esta página",
 	copiedLog: "Registro copiado.",
 };
 
@@ -374,6 +379,7 @@ const RU: typeof HU = {
 	persons: "{{count}} чел.",
 	log: "Журнал",
 	copyLog: "Копировать журнал",
+	checkPage: "Проверить эту страницу",
 	copiedLog: "Журнал скопирован.",
 };
 
@@ -437,6 +443,7 @@ const JA: typeof HU = {
 	persons: "{{count}} 人",
 	log: "ログ",
 	copyLog: "ログをコピー",
+	checkPage: "このページを確認",
 	copiedLog: "ログをコピーした。",
 };
 
@@ -497,6 +504,7 @@ const ZH: typeof HU = {
 	persons: "{{count}} 人",
 	log: "日志",
 	copyLog: "复制日志",
+	checkPage: "检查此页面",
 	copiedLog: "日志已复制。",
 };
 
