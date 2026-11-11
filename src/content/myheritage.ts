@@ -671,10 +671,52 @@ const statusFor = (result: string): string => {
 	return t("failed");
 };
 
+const PROFILE_LIFE_TITLE: Record<string, string> = {
+	birth: "Birth",
+	szuletes: "Birth",
+	geburt: "Birth",
+	naissance: "Birth",
+	nacimiento: "Birth",
+	nascita: "Birth",
+	death: "Death",
+	halal: "Death",
+	elhalalozas: "Death",
+	tod: "Death",
+	deces: "Death",
+	defuncion: "Death",
+	morte: "Death",
+	sterben: "Death",
+	marriage: "Marriage",
+	hazassag: "Marriage",
+	heirat: "Marriage",
+	mariage: "Marriage",
+	matrimonio: "Marriage",
+	boda: "Marriage",
+};
+
+/** Notes under birth, death, and marriage on the profile, where those facts can be edited inline. */
+const readProfileLifeNotes = (): ConnectorFact[] => {
+	const facts: ConnectorFact[] = [];
+	for (const card of Array.from(document.querySelectorAll(".profile_page_section.facts .fact"))) {
+		const name = card.querySelector(".fact_name")?.textContent?.replace(/\s+/g, " ").trim() || "";
+		const note =
+			card.querySelector(".fact_additional_content")?.textContent?.replace(/\s+/g, " ").trim() || "";
+		const title = PROFILE_LIFE_TITLE[foldName(name).replace(/ /g, "")];
+		if (!title || !note || note === "Y") {
+			continue;
+		}
+		facts.push({ title, value: note });
+	}
+	return facts;
+};
+
 const readLiveRelatives = (): Record<"parents" | "spouses" | "children", string[]> => {
 	const relatives = { parents: [] as string[], spouses: [] as string[], children: [] as string[] };
 	for (const card of Array.from(document.querySelectorAll(".family_relative"))) {
-		const name = card.querySelector(".mh_typo_11")?.textContent?.trim() || "";
+		const name =
+			card.querySelector(".relative_name")?.textContent?.trim() ||
+			card.querySelector(".mh_typo_11")?.textContent?.trim() ||
+			"";
 		if (!name) {
 			continue;
 		}
@@ -1132,6 +1174,7 @@ const showTree = async (
 		relatives.parents.push(...section.relatives.parents);
 		relatives.spouses.push(...section.relatives.spouses);
 	}
+	collected.push(...readProfileLifeNotes());
 	const live = readLiveRelatives();
 	if (live.parents.length) {
 		relatives.parents = live.parents;

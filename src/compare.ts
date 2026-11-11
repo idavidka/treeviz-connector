@@ -254,15 +254,16 @@ const withoutDates = (value?: string): string =>
 		.replace(dateChunk(), " ")
 		.replace(/https?:\/\/\S+/gi, " ");
 
-/** Same words in any order, so "date, place, title" matches "title, place, date". */
+/** Same words in any order. Extra whole words still match; a changed spelling does not. */
 const sameWords = (left: string, right: string): boolean => {
-	const key = (value: string) => foldName(value).split(" ").filter(Boolean).sort().join(" ");
-	const a = key(left);
-	const b = key(right);
-	if (!a || !b) {
+	const words = (value: string) => foldName(value).split(" ").filter(Boolean);
+	const a = words(left);
+	const b = words(right);
+	if (!a.length || !b.length) {
 		return false;
 	}
-	return a === b || a.includes(b) || b.includes(a);
+	const covers = (outer: string[], inner: string[]) => inner.every((word) => outer.includes(word));
+	return covers(a, b) || covers(b, a);
 };
 
 export const factUrls = (value?: string): string[] => {
