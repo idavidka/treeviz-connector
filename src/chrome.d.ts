@@ -14,6 +14,20 @@ interface ChromeTab {
 	url?: string;
 }
 
+interface ChromePort {
+	name?: string;
+	sender?: ChromeMessageSender;
+	postMessage: (message: unknown) => void;
+	disconnect: () => void;
+	onMessage: {
+		addListener: (listener: (message: unknown) => void) => void;
+		removeListener: (listener: (message: unknown) => void) => void;
+	};
+	onDisconnect: {
+		addListener: (listener: () => void) => void;
+	};
+}
+
 interface ChromeRuntime {
 	id?: string;
 	lastError?: ChromeLastError;
@@ -31,6 +45,9 @@ interface ChromeRuntime {
 		) => void;
 	};
 	onMessageExternal: ChromeRuntime["onMessage"];
+	onConnectExternal: {
+		addListener: (listener: (port: ChromePort) => void) => void;
+	};
 }
 
 interface ChromeStorageArea {
@@ -65,7 +82,10 @@ interface ChromeNamespace {
 		};
 	};
 	tabs: {
-		create: (props: { url: string; active?: boolean }) => Promise<ChromeTab>;
+		create: (props: {
+			url: string;
+			active?: boolean;
+		}) => Promise<ChromeTab>;
 		update: (
 			tabId: number,
 			props: { url?: string; active?: boolean }

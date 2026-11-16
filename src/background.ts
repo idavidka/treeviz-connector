@@ -5,15 +5,17 @@ import {
 	LOG_KEY,
 	SITE_KEY,
 	PERSON_CAP,
-	type AncestryBatch,
-	type AncestryBatchPerson,
-	type ConnectorIndex,
-	type ConnectorFact,
-	type ConnectorPerson,
-	type ConnectorTree,
-	type FieldDiff,
-	type FieldKey,
-	type SiteSnapshot,
+} from "./protocol.js";
+import type {
+	AncestryBatch,
+	AncestryBatchPerson,
+	ConnectorIndex,
+	ConnectorFact,
+	ConnectorPerson,
+	ConnectorTree,
+	FieldDiff,
+	FieldKey,
+	SiteSnapshot,
 } from "./protocol.js";
 
 const TREE_HOSTS = [
@@ -35,6 +37,98 @@ const allowedPage = (url?: string): boolean => {
 	} catch {
 		return false;
 	}
+};
+
+const TREE_PORT = "treeviz-updates";
+const treePorts = new Set<ChromePort>();
+
+const askTreePort = (
+	port: ChromePort,
+	body: Record<string, unknown>
+): Promise<unknown> =>
+	new Promise((resolve) => {
+		const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+		let settled = false;
+		const finish = (value: unknown) => {
+			if (settled) {
+				return;
+			}
+			settled = true;
+			port.onMessage.removeListener(onResult);
+			resolve(value);
+		};
+		const onResult = (message: unknown) => {
+			const result = message as {
+				type?: string;
+				requestId?: string;
+				result?: unknown;
+			};
+			if (
+				result?.type !== "treeviz:update-result" ||
+				result.requestId !== requestId
+			) {
+				return;
+			}
+			finish(result.result ?? { ok: false, code: "closed" });
+		};
+		port.onMessage.addListener(onResult);
+		try {
+			port.postMessage({
+				type: "connector:update-treeviz",
+				requestId,
+				request: body,
+			});
+		} catch {
+			finish({ ok: false, code: "closed" });
+			return;
+		}
+		setTimeout(() => finish({ ok: false, code: "closed" }), 5000);
+	});
+
+const deliverTreeUpdate = async (
+	body: Record<string, unknown>
+): Promise<unknown> => {
+	let fallback: unknown = { ok: false, code: "closed" };
+	for (const port of treePorts) {
+		const result = (await askTreePort(port, body)) as
+			{ ok?: boolean } | undefined;
+		if (result?.ok) {
+			return result;
+		}
+		if (result) {
+			fallback = result;
+		}
+	}
+	if (treePorts.size > 0) {
+		return fallback;
+	}
+	const tabs = await chrome.tabs.query({
+		url: [
+			"https://treeviz.com/*",
+			"https://www.treeviz.com/*",
+			"https://dev.treeviz.com/*",
+			"https://qa.treeviz.com/*",
+			"http://localhost/*",
+		],
+	});
+	for (const tab of tabs) {
+		if (tab.id == null) {
+			continue;
+		}
+		try {
+			const response = await chrome.tabs.sendMessage(tab.id, body);
+			const result = response as { ok?: boolean } | undefined;
+			if (result?.ok) {
+				return result;
+			}
+			if (result) {
+				fallback = result;
+			}
+		} catch {
+			continue;
+		}
+	}
+	return fallback;
 };
 
 const storageGet = (area: ChromeStorageArea, key: string): Promise<unknown> =>
@@ -365,7 +459,7 @@ const onMessage = (
 		void storageSet(chrome.storage.local, { [INDEX_KEY]: index }).then(
 			() => {
 				void appendLog(
-					`${new Date().toISOString()} [background] index uid=${index.uid} trees=${index.trees.map((tree) => `${tree.source}:${tree.sourceTreeId}:${tree.persons.length}`).join(",")} truncated=${index.truncated}`
+					`${new Date().toISOString()} [background] index uid=${index.uid} trees=${index.trees.map((tree) => `${tree.source}:${tree.sourceTreeId && /^\d+$/.test(tree.sourceTreeId) ? tree.sourceTreeId : "token"}:${tree.persons.length}`).join(",")} truncated=${index.truncated}`
 				);
 				sendResponse({ ok: true, people });
 			}
@@ -387,41 +481,7 @@ const onMessage = (
 	}
 
 	if (type === "connector:update-treeviz") {
-		void chrome.tabs
-			.query({
-				url: [
-					"https://treeviz.com/*",
-					"https://www.treeviz.com/*",
-					"https://dev.treeviz.com/*",
-					"https://qa.treeviz.com/*",
-					"http://localhost/*",
-				],
-			})
-			.then(async (tabs) => {
-				let fallback: unknown = { ok: false, code: "closed" };
-				for (const tab of tabs) {
-					if (tab.id == null) {
-						continue;
-					}
-					try {
-						const response = await chrome.tabs.sendMessage(
-							tab.id,
-							body
-						);
-						const result = response as { ok?: boolean } | undefined;
-						if (result?.ok) {
-							sendResponse(result);
-							return;
-						}
-						if (result) {
-							fallback = result;
-						}
-					} catch {
-						continue;
-					}
-				}
-				sendResponse(fallback);
-			});
+		void deliverTreeUpdate(body).then((result) => sendResponse(result));
 		return true;
 	}
 
@@ -556,3 +616,13 @@ const onMessage = (
 
 chrome.runtime.onMessage.addListener(onMessage);
 chrome.runtime.onMessageExternal.addListener(onMessage);
+chrome.runtime.onConnectExternal.addListener((port) => {
+	if (port.name !== TREE_PORT || !allowedPage(port.sender?.url)) {
+		port.disconnect();
+		return;
+	}
+	treePorts.add(port);
+	port.onDisconnect.addListener(() => {
+		treePorts.delete(port);
+	});
+});
